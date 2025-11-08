@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Import your existing functions
 from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded, post_story
+from fill_agent.fill_agent import analyze_incident
 from polizia_agent.tools import update_context
 from polizia_agent.agent import chat
 from police_cars import (
@@ -149,6 +150,7 @@ def root():
             "POST /incident/summary": "Get incident summary",
             "POST /incident/suggestions": "Get AI suggestions for incident",
             "POST /incident/report": "Generate incident report",
+            "POST /incident/fill_agent": "Use AI agent to detect deviations in location/severity from transcripts",
             "POST /incident/conclude": "Conclude incident and save to knowledge base",
             "PUT /incident/status": "Update incident status to concluded",
             "POST /police/cars": "Create a new police car",
@@ -251,6 +253,25 @@ def generate_incident_report(request: IncidentRequest):
     try:
         report = generate_report(request.incident_id)
         return {"incident_id": request.incident_id, "report": report}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/incident/fill_agent")
+def fill_fields_with_agent(request: IncidentRequest):
+    """
+    Use AI agent to detect deviations between transcripts and current location/severity fields.
+    The agent will only update fields when genuine deviations are detected.
+    """
+    try:
+        # Run the agent analysis - single call
+        agent_response = analyze_incident(request.incident_id)
+        
+        return {
+            "incident_id": request.incident_id,
+            "message": agent_response
+        }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
