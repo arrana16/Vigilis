@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import Sidebar, { incidents } from './components/Sidebar';
-import IncidentPage from './components/IncidentPage';
-import DetailPage from './components/DetailPage';
+import { useState, useEffect, useRef } from "react";
+import Sidebar, { incidents } from "./components/Sidebar";
+import IncidentPage from "./components/IncidentPage";
+import DetailPage from "./components/DetailPage";
 
 export default function Home() {
 	const [activeIncidentId, setActiveIncidentId] = useState<string>(
-		incidents[0]?.id || ''
+		incidents[0]?.id || ""
 	);
 	const [showDetail, setShowDetail] = useState(false);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -21,10 +21,12 @@ export default function Home() {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
-					if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-						const incidentId = entry.target.getAttribute(
-							'data-incident-id'
-						);
+					if (
+						entry.isIntersecting &&
+						entry.intersectionRatio >= 0.5
+					) {
+						const incidentId =
+							entry.target.getAttribute("data-incident-id");
 						if (incidentId) {
 							setActiveIncidentId(incidentId);
 						}
@@ -37,7 +39,7 @@ export default function Home() {
 			}
 		);
 
-		const pages = scrollContainer.querySelectorAll('[data-incident-id]');
+		const pages = scrollContainer.querySelectorAll("[data-incident-id]");
 		pages.forEach((page) => observer.observe(page));
 
 		return () => observer.disconnect();
@@ -52,10 +54,13 @@ export default function Home() {
 		setShowDetail(false);
 	};
 
-	const activeIncident = incidents.find((inc) => inc.id === activeIncidentId) || incidents[0];
+	const activeIncident =
+		incidents.find((inc) => inc.id === activeIncidentId) || incidents[0];
 
 	if (showDetail) {
-		return <DetailPage incident={activeIncident} onBack={handleBackClick} />;
+		return (
+			<DetailPage incident={activeIncident} onBack={handleBackClick} />
+		);
 	}
 
 	return (
@@ -67,14 +72,16 @@ export default function Home() {
 			<div
 				ref={scrollContainerRef}
 				className="flex-1 h-screen overflow-y-scroll snap-y snap-mandatory"
-				style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+				style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
 			>
 				{incidents.map((incident, index) => (
 					<div key={incident.id} data-incident-id={incident.id}>
 						<IncidentPage
 							incident={incident}
 							isPriority={index === 0}
-							onTitleClick={() => handleIncidentClick(incident.id)}
+							onTitleClick={() =>
+								handleIncidentClick(incident.id)
+							}
 						/>
 					</div>
 				))}

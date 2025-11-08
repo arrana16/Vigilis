@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React from 'react';
-import EmbeddedMap from './map/EmbeddedMapLoader';
-import { Incident } from './Sidebar';
+import React from "react";
+import EmbeddedMap from "./map/EmbeddedMapLoader";
+import { Incident } from "./Sidebar";
 
 interface IncidentPageProps {
 	incident: Incident;
@@ -10,36 +10,43 @@ interface IncidentPageProps {
 	onTitleClick?: () => void;
 }
 
-const IncidentPage: React.FC<IncidentPageProps> = ({ incident, isPriority = false, onTitleClick }) => {
+const IncidentPage: React.FC<IncidentPageProps> = ({
+	incident,
+	isPriority = false,
+	onTitleClick,
+}) => {
 	const getSeverityColor = (severity: string) => {
 		switch (severity) {
-			case 'high':
-				return 'bg-d-rl';
-			case 'medium':
-				return 'bg-d-s';
-			case 'low':
-				return 'bg-d-p';
+			case "high":
+				return "bg-d-rl";
+			case "medium":
+				return "bg-d-s";
+			case "low":
+				return "bg-d-p";
 			default:
-				return 'bg-d-os2';
+				return "bg-d-os2";
 		}
 	};
 
 	const getSeverityLabel = (severity: string) => {
 		switch (severity) {
-			case 'high':
-				return 'HIGH SEVERITY';
-			case 'medium':
-				return 'MEDIUM SEVERITY';
-			case 'low':
-				return 'LOW SEVERITY';
+			case "high":
+				return "HIGH SEVERITY";
+			case "medium":
+				return "MEDIUM SEVERITY";
+			case "low":
+				return "LOW SEVERITY";
 			default:
-				return 'UNKNOWN';
+				return "UNKNOWN";
 		}
 	};
 
 	return (
-		<div className="h-screen flex flex-col gap-16 px-32 py-16 snap-start">
-			<div className="flex flex-1 flex-col gap-16 w-full">
+		<div className="h-screen flex flex-col px-32 py-16 snap-start">
+			<div
+				className="flex flex-1 flex-col gap-16 w-full border-2 border-transparent hover:border-d-p transition-colors duration-200 rounded-[32px] p-8 group cursor-pointer"
+				onClick={onTitleClick}
+			>
 				{/* Priority Section */}
 				<div className="flex flex-col gap-8 w-full">
 					{/* Header */}
@@ -54,16 +61,14 @@ const IncidentPage: React.FC<IncidentPageProps> = ({ incident, isPriority = fals
 								{getSeverityLabel(incident.severity)}
 							</p>
 						</div>
-						<p
-							className="text-[64px] leading-none text-white tracking-[-3.2px] cursor-pointer transition-colors hover:text-d-p"
-							onClick={onTitleClick}
-						>
-							{isPriority ? 'PRIORITY: ' : ''}{incident.title}
+						<p className="text-[64px] leading-none text-white tracking-[-3.2px] transition-colors group-hover:text-d-p">
+							{isPriority ? "PRIORITY: " : ""}
+							{incident.title}
 						</p>
 					</div>
 
 					{/* Live Map Card */}
-					<div className="border border-d-p rounded-[32px] h-[505px] w-full">
+					<div className="border border-d-os2 rounded-[32px] h-[505px] w-full">
 						<div className="flex flex-col gap-2.5 h-[505px] p-8 rounded-inherit">
 							<div className="flex gap-2.5 items-center">
 								<p className="text-2xl text-white tracking-[-1.2px]">
