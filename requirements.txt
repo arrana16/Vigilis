@@ -4,3 +4,4 @@ pymongo
 python-dotenv
 fastapi
 uvicorn[standard]
+certifi
