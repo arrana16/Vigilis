@@ -2,9 +2,16 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 import os
 from dotenv import load_dotenv
+import ssl
+import certifi
 
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 
-# Create a new client and connect to the server
-client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
+# Create a new client and connect to the server with SSL certificate verification
+# Use certifi for SSL certificate bundle
+client = MongoClient(
+    MONGO_URI, 
+    server_api=ServerApi('1'),
+    tlsCAFile=certifi.where()  # Use certifi's certificate bundle
+)
