@@ -12,7 +12,14 @@ load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+redis_client = redis.Redis(
+    host='redis-13879.c84.us-east-1-2.ec2.redns.redis-cloud.com',
+    port=13879,
+    decode_responses=True,
+    username="default",
+    password=os.getenv("REDIS_PASSWORD"),
+)
+
 
 
 def get_car_location(car_id: str) -> Optional[Dict[str, Any]]:
