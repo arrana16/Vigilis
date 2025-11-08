@@ -2,7 +2,7 @@ import sys
 import os
 from dotenv import load_dotenv
 from bson import ObjectId
-from google.adk.agents.llm_agent import Tool
+import json
 
 # Load environment variables
 load_dotenv()
@@ -11,17 +11,21 @@ load_dotenv()
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
-# Import database and genai
+# Import database
 from db import client
-from google import genai
 
 db = client["dispatch_db"]
 collection = db["active_incidents"]
-llm = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def update_context(id: str) -> str:
     """
     Retrieve the incident document from MongoDB and return it as a formatted string.
+    
+    Args:
+        id: The incident ID to retrieve from the database
+        
+    Returns:
+        A JSON string containing the full incident document with all details
     """
     try:
         incident = collection.find_one({"_id": ObjectId(id)})
@@ -36,7 +40,4 @@ def update_context(id: str) -> str:
         incident["_id"] = str(incident["_id"])
     
     # Return the BSON document as a formatted string
-    import json
     return json.dumps(incident, indent=2, default=str)
-
-update_context_tool = Tool(func=update_context)
