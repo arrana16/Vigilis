@@ -284,7 +284,8 @@ class PoliceCar:
     @staticmethod
     def delete_police_car(car_id: str) -> bool:
         """
-        Delete a police car from the database.
+        Delete a police car from the database and Redis.
+        This ensures complete cleanup across all systems.
         
         Args:
             car_id: The car's unique identifier
@@ -292,8 +293,23 @@ class PoliceCar:
         Returns:
             bool: True if successful, False otherwise
         """
-        result = police_cars_collection.delete_one({"car_id": car_id})
-        return result.deleted_count > 0
+        try:
+            # Delete from MongoDB
+            result = police_cars_collection.delete_one({"car_id": car_id})
+            
+            # Also delete from Redis to ensure clean state
+            if result.deleted_count > 0:
+                # Lazy import to avoid circular dependency
+                from redis_tracking.redis_client import delete_car_location
+                delete_car_location(car_id)
+                print(f"🗑️ Deleted {car_id} from MongoDB and Redis")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Error deleting police car {car_id}: {e}")
+            return False
 
 
 # Helper functions for easy access

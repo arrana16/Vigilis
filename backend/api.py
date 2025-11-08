@@ -1,9 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import sys
 import os
+import asyncio
+import json
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +24,19 @@ from police_cars import (
     conclude_car_dispatch,
     get_available_cars,
     get_dispatched_cars
+)
+
+# Import Redis and simulation services
+from redis_tracking import (
+    get_car_location, 
+    get_all_car_locations, 
+    get_nearby_cars,
+    redis_client,
+    sync_service,
+    get_sync_stats,
+    car_simulator,
+    add_simulated_car,
+    remove_simulated_car
 )
 
 app = FastAPI(title="Vigilis Emergency Services API", version="1.0.0")
@@ -75,10 +90,44 @@ class UpdateCarLocationRequest(BaseModel):
 class CarIdRequest(BaseModel):
     car_id: str
 
+class NearbyRequest(BaseModel):
+    lat: float
+    lng: float
+    radius_km: Optional[float] = 5.0
+
 # Response models
 class StatusResponse(BaseModel):
     status: str
     message: str
+
+# ============================================================================
+# LIFECYCLE EVENTS
+# ============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background services when the API starts"""
+    # Start the location sync service (Redis -> MongoDB every 10 seconds)
+    asyncio.create_task(sync_service.start())
+    
+    # Start the car simulator (simulates car movement)
+    asyncio.create_task(car_simulator.start())
+    
+    # Auto-add existing cars from DB to simulator
+    car_simulator.auto_add_cars_from_db()
+    
+    print("✅ Background services started: location sync & car simulator")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background services when the API shuts down"""
+    sync_service.stop()
+    car_simulator.stop()
+    print("🛑 Background services stopped")
+
+# ============================================================================
+# ROOT & HEALTH
+# ============================================================================
 
 @app.get("/")
 def root():
@@ -86,8 +135,15 @@ def root():
     return {
         "message": "Vigilis Emergency Services API",
         "version": "1.0.0",
+        "services": {
+            "redis": "Real-time location tracking",
+            "mongodb": "Persistent data storage",
+            "websocket": "Live position streaming",
+            "simulator": "Simulated car movement"
+        },
         "endpoints": {
             "GET /health": "Health check",
+            "GET /stats": "Service statistics",
             "POST /chat": "Chat with Vigilis AI assistant",
             "POST /incident/context": "Get incident context (BSON)",
             "POST /incident/summary": "Get incident summary",
@@ -104,7 +160,13 @@ def root():
             "PUT /police/location": "Update police car location",
             "GET /police/available": "Get all available police cars",
             "GET /police/incident/{incident_id}": "Get cars dispatched to an incident",
-            "DELETE /police/cars/{car_id}": "Delete a police car"
+            "DELETE /police/cars/{car_id}": "Delete a police car",
+            "GET /police/realtime/{car_id}": "Get real-time location from Redis",
+            "GET /police/realtime": "Get all real-time locations from Redis",
+            "POST /police/nearby": "Get nearby police cars within radius",
+            "WS /ws/track/{car_id}": "WebSocket: Stream real-time car location",
+            "POST /simulator/add/{car_id}": "Add car to simulator",
+            "DELETE /simulator/remove/{car_id}": "Remove car from simulator"
         }
     }
 
@@ -112,6 +174,17 @@ def root():
 def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+@app.get("/stats")
+def get_stats():
+    """Get service statistics"""
+    return {
+        "sync_service": get_sync_stats(),
+        "simulator": {
+            "active_cars": len(car_simulator.simulated_cars),
+            "cars": list(car_simulator.simulated_cars.keys())
+        }
+    }
 
 @app.post("/chat")
 def chat_with_agent(request: ChatRequest):
@@ -480,9 +553,11 @@ def get_cars_for_incident(incident_id: str):
 @app.delete("/police/cars/{car_id}")
 def delete_police_car(car_id: str):
     """
-    Delete a police car from the database
+    Delete a police car from the database, Redis, and simulator.
+    This ensures complete cleanup across all systems.
     """
     try:
+        # Delete from MongoDB and Redis
         success = PoliceCar.delete_police_car(car_id)
         
         if not success:
@@ -491,11 +566,183 @@ def delete_police_car(car_id: str):
                 detail=f"Police car {car_id} not found"
             )
         
+        # Also remove from simulator if it's running
+        car_simulator.remove_car(car_id)
+        
         return {
             "status": "success",
-            "message": f"Police car {car_id} deleted successfully",
+            "message": f"Police car {car_id} deleted from all systems (MongoDB, Redis, Simulator)",
             "car_id": car_id
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# REAL-TIME LOCATION ENDPOINTS (Redis)
+# ============================================================================
+
+@app.get("/police/realtime/{car_id}")
+def get_realtime_location(car_id: str):
+    """
+    Get the real-time location of a specific car from Redis.
+    This is high-frequency data updated every second.
+    """
+    try:
+        location = get_car_location(car_id)
+        
+        if not location:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No real-time location found for car {car_id}"
+            )
+        
+        return {
+            "status": "success",
+            "car_id": car_id,
+            "location": location
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/police/realtime")
+def get_all_realtime_locations():
+    """
+    Get all real-time car locations from Redis.
+    This is high-frequency data updated every second.
+    """
+    try:
+        locations = get_all_car_locations()
+        
+        return {
+            "status": "success",
+            "count": len(locations),
+            "locations": locations
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/police/nearby")
+def find_nearby_cars(request: NearbyRequest):
+    """
+    Find police cars within a certain radius of a location.
+    Uses real-time Redis data for most accurate results.
+    """
+    try:
+        nearby = get_nearby_cars(
+            lat=request.lat,
+            lng=request.lng,
+            radius_km=request.radius_km
+        )
+        
+        return {
+            "status": "success",
+            "center": {"lat": request.lat, "lng": request.lng},
+            "radius_km": request.radius_km,
+            "count": len(nearby),
+            "cars": nearby
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# WEBSOCKET ENDPOINTS (Real-time Streaming)
+# ============================================================================
+
+@app.websocket("/ws/track/{car_id}")
+async def websocket_track_car(websocket: WebSocket, car_id: str):
+    """
+    WebSocket endpoint for streaming real-time car location updates.
+    Subscribes to Redis pub/sub channel for the specified car.
+    
+    Usage:
+        const ws = new WebSocket('ws://localhost:8000/ws/track/PC-001');
+        ws.onmessage = (event) => {
+            const location = JSON.parse(event.data);
+            console.log('Car position:', location.lat, location.lng);
+        };
+    """
+    await websocket.accept()
+    
+    # Create Redis pubsub client
+    pubsub = redis_client.pubsub()
+    channel_name = f"car:location:stream:{car_id}"
+    
+    try:
+        # Subscribe to the car's location channel
+        pubsub.subscribe(channel_name)
+        
+        # Send initial confirmation
+        await websocket.send_json({
+            "status": "connected",
+            "car_id": car_id,
+            "channel": channel_name,
+            "message": f"Subscribed to real-time updates for {car_id}"
+        })
+        
+        # Listen for messages
+        while True:
+            # Check for messages from Redis (non-blocking with timeout)
+            message = pubsub.get_message(timeout=0.1)
+            
+            if message and message['type'] == 'message':
+                # Forward the location update to the WebSocket client
+                location_data = json.loads(message['data'])
+                await websocket.send_json(location_data)
+            
+            # Small delay to prevent CPU spinning
+            await asyncio.sleep(0.1)
+            
+    except WebSocketDisconnect:
+        print(f"WebSocket disconnected for car {car_id}")
+    except Exception as e:
+        print(f"WebSocket error for car {car_id}: {e}")
+        await websocket.send_json({
+            "status": "error",
+            "message": str(e)
+        })
+    finally:
+        # Clean up
+        pubsub.unsubscribe(channel_name)
+        pubsub.close()
+
+# ============================================================================
+# SIMULATOR CONTROL ENDPOINTS
+# ============================================================================
+
+@app.post("/simulator/add/{car_id}")
+def add_car_to_simulator(car_id: str, lat: Optional[float] = None, lng: Optional[float] = None):
+    """
+    Add a car to the movement simulator.
+    If lat/lng not provided, will start at a random location in Atlanta.
+    """
+    try:
+        add_simulated_car(car_id, lat, lng)
+        
+        return {
+            "status": "success",
+            "message": f"Car {car_id} added to simulator",
+            "car_id": car_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/simulator/remove/{car_id}")
+def remove_car_from_simulator(car_id: str):
+    """
+    Remove a car from the movement simulator.
+    """
+    try:
+        remove_simulated_car(car_id)
+        
+        return {
+            "status": "success",
+            "message": f"Car {car_id} removed from simulator",
+            "car_id": car_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

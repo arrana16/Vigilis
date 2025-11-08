@@ -313,6 +313,41 @@ This historical data can be used for:
 -   Officer workload tracking
 -   Incident reporting
 
+## Car Deletion and Cleanup
+
+When deleting a police car, the system performs **complete cleanup across all systems**:
+
+### DELETE `/police/cars/{car_id}`
+
+**Removes car from:**
+
+1. **MongoDB** - Permanent database record
+2. **Redis** - Real-time location data
+3. **Simulator** - Active movement simulation
+
+**Example:**
+
+```bash
+curl -X DELETE "http://localhost:8000/police/cars/PC-001"
+```
+
+**Response:**
+
+```json
+{
+	"status": "success",
+	"message": "Police car PC-001 deleted from all systems (MongoDB, Redis, Simulator)",
+	"car_id": "PC-001"
+}
+```
+
+**Implementation Details:**
+
+-   `PoliceCar.delete_police_car()` removes from MongoDB and Redis
+-   API endpoint also removes from simulator to stop movement
+-   Ensures no orphaned data in any system
+-   Prevents sync errors for non-existent cars
+
 ## Future Enhancements
 
 Potential features to add:
