@@ -6,6 +6,11 @@ import MapboxClient from "@mapbox/mapbox-sdk";
 import * as turf from "@turf/turf";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+// Map component props
+interface MapProps {
+	incidentLocation?: [number, number]; // [lng, lat] - if provided, shows incident view
+}
+
 // Stadium coordinates
 const BOBBY_DODD = [-84.3933, 33.7726]; // Bobby Dodd Stadium (Georgia Tech)
 const MERCEDES_BENZ = [-84.4008, 33.7552]; // Mercedes-Benz Stadium
@@ -219,14 +224,140 @@ function addStadiumMarkers(map: mapboxgl.Map) {
 		.addTo(map);
 }
 
-const AtlantaMap: React.FC = () => {
+// Function to add flashing incident marker
+function addIncidentMarker(map: mapboxgl.Map, location: [number, number]) {
+	// Create a circle feature at the incident location
+	// We'll use circle layers to make it appear on the ground with proper perspective
+	map.addSource("incident-circle", {
+		type: "geojson",
+		data: {
+			type: "Feature",
+			properties: {},
+			geometry: {
+				type: "Point",
+				coordinates: location,
+			},
+		},
+	});
+
+	// Add a pulsing circle layer that sits on the ground
+	map.addLayer({
+		id: "incident-pulse-outer",
+		type: "circle",
+		source: "incident-circle",
+		paint: {
+			"circle-radius": [
+				"interpolate",
+				["linear"],
+				["zoom"],
+				10,
+				5,
+				15,
+				25,
+				20,
+				80,
+			],
+			"circle-color": "#da3c3c",
+			"circle-opacity": 0.3,
+			"circle-blur": 0.5,
+		},
+	});
+
+	map.addLayer({
+		id: "incident-pulse-middle",
+		type: "circle",
+		source: "incident-circle",
+		paint: {
+			"circle-radius": [
+				"interpolate",
+				["linear"],
+				["zoom"],
+				10,
+				3,
+				15,
+				15,
+				20,
+				50,
+			],
+			"circle-color": "#f48484",
+			"circle-opacity": 0.5,
+		},
+	});
+
+	map.addLayer({
+		id: "incident-pulse-inner",
+		type: "circle",
+		source: "incident-circle",
+		paint: {
+			"circle-radius": [
+				"interpolate",
+				["linear"],
+				["zoom"],
+				10,
+				2,
+				15,
+				8,
+				20,
+				25,
+			],
+			"circle-color": "#da3c3c",
+			"circle-opacity": 1,
+			"circle-stroke-width": 2,
+			"circle-stroke-color": "#ffffff",
+		},
+	});
+
+	// Animate the outer circle with a pulsing effect
+	let radiusScale = 1;
+	let growing = true;
+
+	function animatePulse() {
+		if (growing) {
+			radiusScale += 0.02;
+			if (radiusScale >= 1.5) growing = false;
+		} else {
+			radiusScale -= 0.02;
+			if (radiusScale <= 1) growing = true;
+		}
+
+		const opacity = (0.3 * (1.5 - radiusScale)) / 0.5;
+
+		map.setPaintProperty("incident-pulse-outer", "circle-radius", [
+			"interpolate",
+			["linear"],
+			["zoom"],
+			10,
+			5 * radiusScale,
+			15,
+			25 * radiusScale,
+			20,
+			80 * radiusScale,
+		]);
+
+		map.setPaintProperty("incident-pulse-outer", "circle-opacity", opacity);
+
+		requestAnimationFrame(animatePulse);
+	}
+
+	animatePulse();
+}
+
+const Map: React.FC<MapProps> = ({ incidentLocation }) => {
 	const mapContainer = useRef<HTMLDivElement>(null);
 	const map = useRef<mapboxgl.Map | null>(null);
-	// Center between Bobby Dodd and Mercedes-Benz stadiums
-	const [lng, setLng] = useState((BOBBY_DODD[0] + MERCEDES_BENZ[0]) / 2);
-	const [lat, setLat] = useState((BOBBY_DODD[1] + MERCEDES_BENZ[1]) / 2);
-	const [zoom, setZoom] = useState(14);
-	const [pitch, setPitch] = useState(30); // Slightly lower pitch to see the full route
+	// Center between Bobby Dodd and Mercedes-Benz stadiums by default
+	const [lng, setLng] = useState(
+		incidentLocation
+			? incidentLocation[0]
+			: (BOBBY_DODD[0] + MERCEDES_BENZ[0]) / 2
+	);
+	const [lat, setLat] = useState(
+		incidentLocation
+			? incidentLocation[1]
+			: (BOBBY_DODD[1] + MERCEDES_BENZ[1]) / 2
+	);
+	const [zoom, setZoom] = useState(incidentLocation ? 16 : 14);
+	const [pitch, setPitch] = useState(incidentLocation ? 45 : 30);
 
 	useEffect(() => {
 		// Initialize map when component mounts
@@ -279,29 +410,29 @@ const AtlantaMap: React.FC = () => {
 					type: "fill-extrusion",
 					minzoom: 13,
 					paint: {
-						// Use color based on building height for better visualization - dark gray tones
+						// Use color based on building height for better visualization - darker gray tones
 						"fill-extrusion-color": [
 							"interpolate",
 							["linear"],
 							["get", "height"],
 							0,
-							"#4a4a4a",
-							30,
-							"#424242",
-							50,
-							"#3a3a3a",
-							100,
-							"#323232",
-							150,
 							"#2a2a2a",
-							200,
-							"#222222",
-							250,
+							30,
+							"#252525",
+							50,
+							"#202020",
+							100,
 							"#1a1a1a",
+							150,
+							"#151515",
+							200,
+							"#101010",
+							250,
+							"#0d0d0d",
 							300,
-							"#121212",
-							400,
 							"#0a0a0a",
+							400,
+							"#050505",
 						],
 						// Dynamic height based on zoom level
 						"fill-extrusion-height": [
@@ -356,23 +487,23 @@ const AtlantaMap: React.FC = () => {
 							["linear"],
 							["get", "height"],
 							0,
-							"#5a5a5a",
-							30,
-							"#525252",
-							50,
-							"#4a4a4a",
-							100,
-							"#424242",
-							150,
 							"#3a3a3a",
-							200,
-							"#323232",
-							250,
+							30,
+							"#353535",
+							50,
+							"#303030",
+							100,
 							"#2a2a2a",
-							300,
-							"#222222",
-							400,
+							150,
+							"#252525",
+							200,
+							"#202020",
+							250,
 							"#1a1a1a",
+							300,
+							"#151515",
+							400,
+							"#101010",
 						],
 						"fill-opacity": [
 							"interpolate",
@@ -399,7 +530,7 @@ const AtlantaMap: React.FC = () => {
 					type: "line",
 					minzoom: 13,
 					paint: {
-						"line-color": "#1a1a1a",
+						"line-color": "#0a0a0a",
 						"line-width": [
 							"interpolate",
 							["linear"],
@@ -436,7 +567,7 @@ const AtlantaMap: React.FC = () => {
 					type: "line",
 					minzoom: 15,
 					paint: {
-						"line-color": "#555",
+						"line-color": "#333",
 						"line-width": [
 							"interpolate",
 							["linear"],
@@ -452,8 +583,12 @@ const AtlantaMap: React.FC = () => {
 				labelLayerId
 			);
 
-			// Add route source and layers
-			addRouteToMap(map.current);
+			// Add incident marker if location is provided, otherwise add route animation
+			if (incidentLocation) {
+				addIncidentMarker(map.current, incidentLocation);
+			} else {
+				addRouteToMap(map.current);
+			}
 		});
 
 		// Update state when map moves
@@ -618,4 +753,4 @@ const AtlantaMap: React.FC = () => {
 	);
 };
 
-export default AtlantaMap;
+export default Map;

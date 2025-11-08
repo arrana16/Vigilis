@@ -2,26 +2,100 @@
 @import "mapbox-gl/dist/mapbox-gl.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+	/* Design System Colors */
+	--d-bg: #101010;
+	--d-os: #ffffff;
+	--d-os2: #4e4e4e;
+	--d-p: #a4caed;
+	--d-s: #3c56da;
+	--d-rl: #f48484;
+	--d-r: #da3c3c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+	/* Colors */
+	--color-d-bg: var(--d-bg);
+	--color-d-os: var(--d-os);
+	--color-d-os2: var(--d-os2);
+	--color-d-p: var(--d-p);
+	--color-d-s: var(--d-s);
+	--color-d-rl: var(--d-rl);
+	--color-d-r: var(--d-r);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+	/* Typography */
+	--font-sans: var(--font-exo);
+
+	/* Font Sizes */
+	--font-size-title: 64px;
+	--font-size-h1: 24px;
+	--font-size-h2: 16px;
+	--font-size-body: 12px;
+	--font-size-action: 12px;
+
+	/* Letter Spacing */
+	--letter-spacing-title: -3.2px;
+	--letter-spacing-h1: -1.2px;
+	--letter-spacing-h2: -0.8px;
+	--letter-spacing-body: -0.6px;
+	--letter-spacing-action: -0.6px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+	background: var(--d-bg);
+	color: var(--d-os);
+	font-family: var(--font-exo), sans-serif;
+}
+
+@keyframes blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.3;
+	}
+}
+
+.severity-indicator {
+	animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes slideInFromLeft {
+	from {
+		opacity: 0;
+		transform: translateX(-20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+.animate-fadeIn {
+	animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slideIn {
+	animation: slideInFromLeft 0.4s ease-out;
+}
+
+@keyframes pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scaleY(1);
+	}
+	50% {
+		opacity: 0.7;
+		transform: scaleY(0.6);
+	}
 }
