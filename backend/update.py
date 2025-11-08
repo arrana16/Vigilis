@@ -73,7 +73,7 @@ Write one detailed paragraph covering: what happened, units dispatched, response
 
     return summary.text
 
-def set_concluded(id: str):
+def set_concluded(id: str) -> str:
     """
     Update the incident status to 'CONCLUDED' in the active_incidents collection.
     """
@@ -84,7 +84,7 @@ def set_concluded(id: str):
         )
         if result.matched_count == 0:
             raise ValueError(f"No incident found with ID: {id}")
-        return f"Incident with ID {id} marked as CONCLUDED."
+        return f"Incident {id} marked as concluded"
     except ValueError:
         raise
     except Exception as e:
@@ -136,39 +136,36 @@ def create_bson(id: str):
         "final_summary_embedding": embedding
     }
     
-    # Insert the document into the knowledge_base collection
-    insert_result = knowledge_base.insert_one(concluded_incident_bson)
-    concluded_incident_bson["_id"] = str(insert_result.inserted_id)
-    
+    # Return the BSON document (don't insert yet)
     return concluded_incident_bson
 
 def post_story(id: str):
     """
-    Generate a comprehensive incident report and create a BSON document 
-    for the concluded incidents collection with vector embedding.
-    Then save it to the knowledge_base collection.
+    Complete workflow: Mark incident as concluded, generate report, create BSON, 
+    and save to knowledge_base collection.
+    
+    Returns the inserted document with its MongoDB _id
     """
-    try:
-        # First, mark incident as concluded
-        status_msg = set_concluded(id)
-        # Then create and save the BSON document (may raise ValueError)
-        result = create_bson(id)
-        
-        return result
-    except ValueError as e:
-        return {"error": str(e)}
-    except Exception as e:
-        return {"error": str(e)}
+    # First, mark incident as concluded (may raise ValueError)
+    set_concluded(id)
+    
+    # Then create the BSON document (may raise ValueError)
+    bson_doc = create_bson(id)
+    
+    # Insert into knowledge_base
+    result = knowledge_base.insert_one(bson_doc)
+    bson_doc["_id"] = str(result.inserted_id)
+    
+    return bson_doc
 
 
 if __name__ == "__main__":
     # Test the function
-    test_id = "690eb0a52e8f17ecb7b23e81"
+    # test_id = "690eb0a52e8f17ecb7b23e81"
+    test_id = "67"
     
     print("Generating report and creating BSON document...\n")
-    set_concluded(test_id)
-    result = create_bson(test_id)
-    
+    result = post_story(test_id)
     
     if "error" in result:
         print(f"Error: {result['error']}")

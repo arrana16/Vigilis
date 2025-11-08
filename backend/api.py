@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import your existing functions
 from suggest import givesuggestions, summarize_current_status
-from update import generate_report, create_bson, set_concluded
+from update import generate_report, create_bson, set_concluded, post_story
 from polizia_agent.tools import update_context
 from polizia_agent.agent import chat
 
@@ -135,9 +135,9 @@ def generate_incident_report(request: IncidentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/incident/post_story")
-def post_story(request: ConcludeIncidentRequest):
+def post_story_endpoint(request: ConcludeIncidentRequest):
     """
-    Conclude an incident: generate report, create embedding, save to knowledge base
+    Conclude an incident: mark as concluded, generate report, create embedding, save to knowledge base
     """
     try:
         result = post_story(request.incident_id)
