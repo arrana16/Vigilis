@@ -10,19 +10,10 @@ from typing import Dict, Any, Optional, List
 
 load_dotenv()
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-# Create Redis client
-redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    password=REDIS_PASSWORD,
-    db=REDIS_DB,
-    decode_responses=True  # Automatically decode responses to strings
-)
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
 
 def get_car_location(car_id: str) -> Optional[Dict[str, Any]]:
     """
