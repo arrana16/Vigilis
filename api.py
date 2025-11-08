@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded
 from polizia_agent.tools import update_context
+from polizia_agent.agent import chat
 
 app = FastAPI(title="Vigilis Emergency Services API", version="1.0.0")
 
@@ -31,6 +32,10 @@ class IncidentRequest(BaseModel):
 class ConcludeIncidentRequest(BaseModel):
     incident_id: str
 
+class ChatRequest(BaseModel):
+    message: str
+    incident_id: Optional[str] = None
+
 # Response models
 class StatusResponse(BaseModel):
     status: str
@@ -44,6 +49,7 @@ def root():
         "version": "1.0.0",
         "endpoints": {
             "GET /health": "Health check",
+            "POST /chat": "Chat with Vigilis AI assistant",
             "POST /incident/context": "Get incident context (BSON)",
             "POST /incident/summary": "Get incident summary",
             "POST /incident/suggestions": "Get AI suggestions for incident",
@@ -57,6 +63,21 @@ def root():
 def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+@app.post("/chat")
+def chat_with_agent(request: ChatRequest):
+    """
+    Chat with the Vigilis AI assistant. Optionally provide an incident_id for context.
+    """
+    try:
+        response = chat(request.message, request.incident_id)
+        return {
+            "message": request.message,
+            "incident_id": request.incident_id,
+            "response": response
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/incident/context")
 def get_incident_context(request: IncidentRequest):
