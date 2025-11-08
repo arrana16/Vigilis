@@ -1,0 +1,6 @@
+google-genai
+google-adk
+pymongo
+python-dotenv
+fastapi
+uvicorn[standard]
