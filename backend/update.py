@@ -8,6 +8,9 @@ from datetime import datetime
 # Load environment variables from .env file
 load_dotenv()
 
+# Force API key mode (not Vertex AI)
+os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = '0'
+
 # Add parent directory to path to import from root-level agent.py
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
