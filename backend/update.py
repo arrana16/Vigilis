@@ -29,10 +29,10 @@ def generate_report(id: str):
     try:
         incident = collection.find_one({"_id": ObjectId(id)})
     except Exception as e:
-        return f"Error querying incident with ID {id}: {e}"
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
     
     if not incident:
-        return f"No incident found with ID: {id}"
+        raise ValueError(f"No incident found with ID: {id}")
     
     # Extract all relevant incident data
     incident_id = incident.get("incident_id", "N/A")
@@ -55,70 +55,25 @@ def generate_report(id: str):
     patrol_comm = transcripts.get("Patrol_12_comm", "No patrol communications available.")
     engine_comm = transcripts.get("Engine_01_comm", "No engine communications available.")
     
-    prompt = f"""You are a professional emergency services documentation specialist and performance analyst. Your task is to create a comprehensive incident report that not only documents what happened, but also analyzes the team's response effectiveness.
-
-CRITICAL INSTRUCTIONS:
-- Carefully analyze ALL transcript data provided
-- Evaluate response times, communication quality, and coordination
-- Identify what the team did well and any areas for improvement
-- Extract specific details about unit performance and decision-making
-- Note the sequence of events and how quickly actions were taken
+    prompt = f"""Generate a comprehensive 300-word incident report paragraph analyzing this emergency response.
 
 INCIDENT DATA:
-- Incident ID: {incident_id}
-- Location: {address}
-- Coordinates: {coords}
-- Date/Time: {created_at}
-- Status: {status}
-- Current Summary: {current_summary}
+ID: {incident_id} | Location: {address} | Status: {status} | Time: {created_at}
 
-911 CALL TRANSCRIPT: 
-{call_911}
+911 CALL: {call_911}
+PATROL COMMS: {patrol_comm}
+FIRE ENGINE COMMS: {engine_comm}
 
-PATROL COMMUNICATIONS: 
-{patrol_comm}
-
-FIRE ENGINE COMMUNICATIONS: 
-{engine_comm}
-
-Generate a professional incident report of approximately 300 words that includes:
-
-1. INCIDENT OVERVIEW 
-   - Report #, Date/Time, Location, Type of emergency
-
-2. SITUATION SUMMARY 
-   - What was reported and by whom
-   - Initial assessment and severity
-   - Key details from the 911 call
-
-3. RESPONSE ANALYSIS & TIMELINE
-   - Which units were dispatched and when
-   - Response times and arrival times
-   - Actions taken by each unit
-   - Quality of communication between dispatcher and units
-   - Coordination effectiveness between different responding teams
-
-4. PERFORMANCE EVALUATION
-   - What the team did effectively
-   - Response time assessment
-   - Communication clarity and professionalism
-   - Any delays or issues encountered
-   - Suggestions for improvement if applicable
-
-5. CURRENT STATUS & OUTCOME
-   - Current state of the incident
-   - Outstanding actions or follow-up needed
-
-IMPORTANT: Base your analysis ONLY on the transcript data provided. Be specific about times, unit names, and actions. Evaluate the response objectively and professionally. Use formal language appropriate for official emergency services documentation."""
+Write one detailed paragraph covering: what happened, units dispatched, response times, actions taken, communication quality, team coordination effectiveness, and outcome. Focus on performance analysis - what worked well and areas for improvement. Be specific with times and unit names. Use only the data provided."""
     
     summary = llm.models.generate_content(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash",
         contents=prompt,
     )
 
     return summary.text
 
-def set_concluded(id: str):
+def set_concluded(id: str) -> str:
     """
     Update the incident status to 'CONCLUDED' in the active_incidents collection.
     """
@@ -128,10 +83,12 @@ def set_concluded(id: str):
             {"$set": {"status": "concluded"}}
         )
         if result.matched_count == 0:
-            return f"No incident found with ID: {id}"
-        return f"Incident with ID {id} marked as CONCLUDED."
+            raise ValueError(f"No incident found with ID: {id}")
+        return f"Incident {id} marked as concluded"
+    except ValueError:
+        raise
     except Exception as e:
-        return f"Error updating incident with ID {id}: {e}"
+        raise ValueError(f"Error updating incident with ID {id}: {e}")
 
 
 def create_bson(id: str):
@@ -140,64 +97,75 @@ def create_bson(id: str):
     for the concluded incidents collection with vector embedding.
     Then save it to the knowledge_base collection.
     """
-    try:
-        # Get the original incident from active_incidents
-        incident = collection.find_one({"_id": ObjectId(id)})
-        if not incident:
-            return {"error": f"No incident found with ID: {id}"}
-        
-        # Generate the comprehensive report
-        report_text = generate_report(id)
-        
-        # Generate embedding for vector search
-        embedding_result = llm.models.embed_content(
-            model="gemini-embedding-001",
-            contents=[report_text],
-            config=types.EmbedContentConfig(output_dimensionality=768)
-        )
-        
-        # Extract embedding values
-        if hasattr(embedding_result.embeddings[0], 'values'):
-            embedding = list(embedding_result.embeddings[0].values)
-        else:
-            embedding = list(embedding_result.embeddings[0])
-        
-        # Extract location from original incident
-        location = incident.get("location", {})
-        address_text = location.get("address_text", "Unknown location")
-        
-        # Get incident_id from original incident
-        original_incident_id = incident.get("incident_id", "Unknown")
-        
-        # Create the BSON document for concluded_incidents collection
-        concluded_incident_bson = {
-            "original_incident_id": original_incident_id,
-            "concluded_at": datetime.utcnow().isoformat() + "Z",
-            "location": {
-                "address_text": address_text
-            },
-            "final_summary": report_text,
-            "final_summary_embedding": embedding
-        }
-        
-        # Insert the document into the knowledge_base collection
-        insert_result = knowledge_base.insert_one(concluded_incident_bson)
-        concluded_incident_bson["_id"] = str(insert_result.inserted_id)
-        
-        return concluded_incident_bson
-        
-    except Exception as e:
-        return {"error": f"Error creating BSON document: {str(e)}"}
+    # Get the original incident from active_incidents
+    incident = collection.find_one({"_id": ObjectId(id)})
+    if not incident:
+        raise ValueError(f"No incident found with ID: {id}")
+    
+    # Generate the comprehensive report (may raise ValueError)
+    report_text = generate_report(id)
+    
+    # Generate embedding for vector search
+    embedding_result = llm.models.embed_content(
+        model="gemini-embedding-001",
+        contents=[report_text],
+        config=types.EmbedContentConfig(output_dimensionality=768)
+    )
+    
+    # Extract embedding values
+    if hasattr(embedding_result.embeddings[0], 'values'):
+        embedding = list(embedding_result.embeddings[0].values)
+    else:
+        embedding = list(embedding_result.embeddings[0])
+    
+    # Extract location from original incident
+    location = incident.get("location", {})
+    address_text = location.get("address_text", "Unknown location")
+    
+    # Get incident_id from original incident
+    original_incident_id = incident.get("incident_id", "Unknown")
+    
+    # Create the BSON document for concluded_incidents collection
+    concluded_incident_bson = {
+        "original_incident_id": original_incident_id,
+        "concluded_at": datetime.utcnow().isoformat() + "Z",
+        "location": {
+            "address_text": address_text
+        },
+        "final_summary": report_text,
+        "final_summary_embedding": embedding
+    }
+    
+    # Return the BSON document (don't insert yet)
+    return concluded_incident_bson
+
+def post_story(id: str):
+    """
+    Complete workflow: Mark incident as concluded, generate report, create BSON, 
+    and save to knowledge_base collection.
+    
+    Returns the inserted document with its MongoDB _id
+    """
+    # First, mark incident as concluded (may raise ValueError)
+    set_concluded(id)
+    
+    # Then create the BSON document (may raise ValueError)
+    bson_doc = create_bson(id)
+    
+    # Insert into knowledge_base
+    result = knowledge_base.insert_one(bson_doc)
+    bson_doc["_id"] = str(result.inserted_id)
+    
+    return bson_doc
 
 
 if __name__ == "__main__":
     # Test the function
-    test_id = "690eb0a52e8f17ecb7b23e81"
+    # test_id = "690eb0a52e8f17ecb7b23e81"
+    test_id = "67"
     
     print("Generating report and creating BSON document...\n")
-    set_concluded(test_id)
-    result = create_bson(test_id)
-    
+    result = post_story(test_id)
     
     if "error" in result:
         print(f"Error: {result['error']}")

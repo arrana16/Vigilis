@@ -27,10 +27,10 @@ def summarize_current_status(id: str) -> str:
     try:
         incident = collection.find_one({"_id": ObjectId(id)})
     except Exception as e:
-        return f"Error querying incident with ID {id}: {e}"
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
     
     if not incident:
-        return f"No incident found with ID: {id}"
+        raise ValueError(f"No incident found with ID: {id}")
     
     transcripts = incident.get("transcripts", {})
     
@@ -40,17 +40,24 @@ def summarize_current_status(id: str) -> str:
             transcript_text += f"\n{key}:\n{value}\n"
     
     if not transcript_text.strip():
-        return "No transcript data available for this incident."
+        raise ValueError("No transcript data available for this incident.")
     
-    prompt = f"""Based on the following emergency incident transcripts, provide a concise summary of the current status: 
-            {transcript_text} Summary:"""
+    prompt = f"""Based on the following emergency incident transcripts, provide a concise summary of the current status. 
+    
+You will be given transcript data from an emergency incident. Parse this information and provide a very clear summary of what is currently happening.
+
+Transcripts:
+{transcript_text}
+
+Provide only the summary text, no additional formatting:"""
     
     summary = llm.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
     )
 
-    return summary
+    # Extract text from response object
+    return summary.text
 
 def vectorize_running_summary(text) -> list:
     result = llm.models.embed_content(
@@ -105,6 +112,7 @@ def retrieve_similar_stories(vector) -> list:
     return similar_stories
 
 def givesuggestions(eventid: str) -> str:
+    # This will raise ValueError if incident not found - let it propagate
     text = summarize_current_status(eventid)
     vector = vectorize_running_summary(text)
     similar_stories = retrieve_similar_stories(vector)
@@ -160,6 +168,7 @@ Analyze the historical outcomes and provide data-driven suggestions:"""
 
 if __name__ == "__main__":
     id = "690eb0a52e8f17ecb7b23e81"
+    # id = "690eb0a52e8f17ecb7b23e81"
     suggestions = givesuggestions(id)
     print("Suggestions:")
     print(suggestions)

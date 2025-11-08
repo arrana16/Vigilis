@@ -26,14 +26,17 @@ def update_context(id: str) -> str:
         
     Returns:
         A JSON string containing the full incident document with all details
+        
+    Raises:
+        ValueError: If incident is not found or database query fails
     """
     try:
         incident = collection.find_one({"_id": ObjectId(id)})
     except Exception as e:
-        return f"Error querying incident with ID {id}: {e}"
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
     
     if not incident:
-        return f"No incident found with ID: {id}"
+        raise ValueError(f"No incident found with ID: {id}")
     
     # Convert ObjectId to string for JSON serialization
     if "_id" in incident:
