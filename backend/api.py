@@ -54,7 +54,7 @@ def root():
             "POST /incident/summary": "Get incident summary",
             "POST /incident/suggestions": "Get AI suggestions for incident",
             "POST /incident/report": "Generate incident report",
-            "POST /incident/conclude": "Conclude incident and save to knowledge base",
+            "POST /incident/post_story": "Conclude incident and save to knowledge base",
             "PUT /incident/status": "Update incident status to concluded"
         }
     }
@@ -134,22 +134,17 @@ def generate_incident_report(request: IncidentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/incident/conclude")
-def conclude_incident(request: ConcludeIncidentRequest):
+@app.post("/incident/post_story")
+def post_story(request: ConcludeIncidentRequest):
     """
     Conclude an incident: generate report, create embedding, save to knowledge base
     """
     try:
-        # First, mark incident as concluded
-        status_msg = set_concluded(request.incident_id)
-        
-        # Then create and save the BSON document (may raise ValueError)
-        result = create_bson(request.incident_id)
+        result = post_story(request.incident_id)
         
         # Remove the embedding from response (too large)
         response_data = {
             "incident_id": request.incident_id,
-            "status_update": status_msg,
             "concluded_at": result.get("concluded_at"),
             "original_incident_id": result.get("original_incident_id"),
             "location": result.get("location"),

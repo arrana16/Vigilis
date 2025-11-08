@@ -55,64 +55,19 @@ def generate_report(id: str):
     patrol_comm = transcripts.get("Patrol_12_comm", "No patrol communications available.")
     engine_comm = transcripts.get("Engine_01_comm", "No engine communications available.")
     
-    prompt = f"""You are a professional emergency services documentation specialist and performance analyst. Your task is to create a comprehensive incident report that not only documents what happened, but also analyzes the team's response effectiveness.
-
-CRITICAL INSTRUCTIONS:
-- Carefully analyze ALL transcript data provided
-- Evaluate response times, communication quality, and coordination
-- Identify what the team did well and any areas for improvement
-- Extract specific details about unit performance and decision-making
-- Note the sequence of events and how quickly actions were taken
+    prompt = f"""Generate a comprehensive 300-word incident report paragraph analyzing this emergency response.
 
 INCIDENT DATA:
-- Incident ID: {incident_id}
-- Location: {address}
-- Coordinates: {coords}
-- Date/Time: {created_at}
-- Status: {status}
-- Current Summary: {current_summary}
+ID: {incident_id} | Location: {address} | Status: {status} | Time: {created_at}
 
-911 CALL TRANSCRIPT: 
-{call_911}
+911 CALL: {call_911}
+PATROL COMMS: {patrol_comm}
+FIRE ENGINE COMMS: {engine_comm}
 
-PATROL COMMUNICATIONS: 
-{patrol_comm}
-
-FIRE ENGINE COMMUNICATIONS: 
-{engine_comm}
-
-Generate a professional incident report of approximately 300 words that includes:
-
-1. INCIDENT OVERVIEW 
-   - Report #, Date/Time, Location, Type of emergency
-
-2. SITUATION SUMMARY 
-   - What was reported and by whom
-   - Initial assessment and severity
-   - Key details from the 911 call
-
-3. RESPONSE ANALYSIS & TIMELINE
-   - Which units were dispatched and when
-   - Response times and arrival times
-   - Actions taken by each unit
-   - Quality of communication between dispatcher and units
-   - Coordination effectiveness between different responding teams
-
-4. PERFORMANCE EVALUATION
-   - What the team did effectively
-   - Response time assessment
-   - Communication clarity and professionalism
-   - Any delays or issues encountered
-   - Suggestions for improvement if applicable
-
-5. CURRENT STATUS & OUTCOME
-   - Current state of the incident
-   - Outstanding actions or follow-up needed
-
-IMPORTANT: Base your analysis ONLY on the transcript data provided. Be specific about times, unit names, and actions. Evaluate the response objectively and professionally. Use formal language appropriate for official emergency services documentation."""
+Write one detailed paragraph covering: what happened, units dispatched, response times, actions taken, communication quality, team coordination effectiveness, and outcome. Focus on performance analysis - what worked well and areas for improvement. Be specific with times and unit names. Use only the data provided."""
     
     summary = llm.models.generate_content(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash",
         contents=prompt,
     )
 
@@ -186,6 +141,24 @@ def create_bson(id: str):
     concluded_incident_bson["_id"] = str(insert_result.inserted_id)
     
     return concluded_incident_bson
+
+def post_story(id: str):
+    """
+    Generate a comprehensive incident report and create a BSON document 
+    for the concluded incidents collection with vector embedding.
+    Then save it to the knowledge_base collection.
+    """
+    try:
+        # First, mark incident as concluded
+        status_msg = set_concluded(id)
+        # Then create and save the BSON document (may raise ValueError)
+        result = create_bson(id)
+        
+        return result
+    except ValueError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":
