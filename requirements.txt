@@ -1,7 +1,9 @@
 google-genai
-google-adk
+google.adk
 pymongo
 python-dotenv
 fastapi
 uvicorn[standard]
 certifi
+redis
+websockets
