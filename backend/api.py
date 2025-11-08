@@ -76,6 +76,8 @@ def chat_with_agent(request: ChatRequest):
             "incident_id": request.incident_id,
             "response": response
         }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -86,11 +88,10 @@ def get_incident_context(request: IncidentRequest):
     """
     try:
         context = update_context(request.incident_id)
-        if context.startswith("Error") or context.startswith("No incident"):
-            raise HTTPException(status_code=404, detail=context)
-        
         import json
         return {"incident_id": request.incident_id, "context": json.loads(context)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -101,10 +102,9 @@ def get_incident_summary(request: IncidentRequest):
     """
     try:
         summary = summarize_current_status(request.incident_id)
-        if summary.startswith("Error") or summary.startswith("No incident"):
-            raise HTTPException(status_code=404, detail=summary)
-        
         return {"incident_id": request.incident_id, "summary": summary}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -116,6 +116,8 @@ def get_incident_suggestions(request: IncidentRequest):
     try:
         suggestions = givesuggestions(request.incident_id)
         return {"incident_id": request.incident_id, "suggestions": suggestions}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -126,10 +128,9 @@ def generate_incident_report(request: IncidentRequest):
     """
     try:
         report = generate_report(request.incident_id)
-        if report.startswith("Error") or report.startswith("No incident"):
-            raise HTTPException(status_code=404, detail=report)
-        
         return {"incident_id": request.incident_id, "report": report}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -142,11 +143,8 @@ def conclude_incident(request: ConcludeIncidentRequest):
         # First, mark incident as concluded
         status_msg = set_concluded(request.incident_id)
         
-        # Then create and save the BSON document
+        # Then create and save the BSON document (may raise ValueError)
         result = create_bson(request.incident_id)
-        
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
         
         # Remove the embedding from response (too large)
         response_data = {
@@ -161,6 +159,8 @@ def conclude_incident(request: ConcludeIncidentRequest):
         }
         
         return response_data
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -171,10 +171,9 @@ def update_incident_status(request: IncidentRequest):
     """
     try:
         result = set_concluded(request.incident_id)
-        if result.startswith("Error") or result.startswith("No incident"):
-            raise HTTPException(status_code=404, detail=result)
-        
         return {"incident_id": request.incident_id, "message": result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

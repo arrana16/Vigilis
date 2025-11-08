@@ -29,10 +29,10 @@ def generate_report(id: str):
     try:
         incident = collection.find_one({"_id": ObjectId(id)})
     except Exception as e:
-        return f"Error querying incident with ID {id}: {e}"
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
     
     if not incident:
-        return f"No incident found with ID: {id}"
+        raise ValueError(f"No incident found with ID: {id}")
     
     # Extract all relevant incident data
     incident_id = incident.get("incident_id", "N/A")
@@ -128,10 +128,12 @@ def set_concluded(id: str):
             {"$set": {"status": "concluded"}}
         )
         if result.matched_count == 0:
-            return f"No incident found with ID: {id}"
+            raise ValueError(f"No incident found with ID: {id}")
         return f"Incident with ID {id} marked as CONCLUDED."
+    except ValueError:
+        raise
     except Exception as e:
-        return f"Error updating incident with ID {id}: {e}"
+        raise ValueError(f"Error updating incident with ID {id}: {e}")
 
 
 def create_bson(id: str):
@@ -140,54 +142,50 @@ def create_bson(id: str):
     for the concluded incidents collection with vector embedding.
     Then save it to the knowledge_base collection.
     """
-    try:
-        # Get the original incident from active_incidents
-        incident = collection.find_one({"_id": ObjectId(id)})
-        if not incident:
-            return {"error": f"No incident found with ID: {id}"}
-        
-        # Generate the comprehensive report
-        report_text = generate_report(id)
-        
-        # Generate embedding for vector search
-        embedding_result = llm.models.embed_content(
-            model="gemini-embedding-001",
-            contents=[report_text],
-            config=types.EmbedContentConfig(output_dimensionality=768)
-        )
-        
-        # Extract embedding values
-        if hasattr(embedding_result.embeddings[0], 'values'):
-            embedding = list(embedding_result.embeddings[0].values)
-        else:
-            embedding = list(embedding_result.embeddings[0])
-        
-        # Extract location from original incident
-        location = incident.get("location", {})
-        address_text = location.get("address_text", "Unknown location")
-        
-        # Get incident_id from original incident
-        original_incident_id = incident.get("incident_id", "Unknown")
-        
-        # Create the BSON document for concluded_incidents collection
-        concluded_incident_bson = {
-            "original_incident_id": original_incident_id,
-            "concluded_at": datetime.utcnow().isoformat() + "Z",
-            "location": {
-                "address_text": address_text
-            },
-            "final_summary": report_text,
-            "final_summary_embedding": embedding
-        }
-        
-        # Insert the document into the knowledge_base collection
-        insert_result = knowledge_base.insert_one(concluded_incident_bson)
-        concluded_incident_bson["_id"] = str(insert_result.inserted_id)
-        
-        return concluded_incident_bson
-        
-    except Exception as e:
-        return {"error": f"Error creating BSON document: {str(e)}"}
+    # Get the original incident from active_incidents
+    incident = collection.find_one({"_id": ObjectId(id)})
+    if not incident:
+        raise ValueError(f"No incident found with ID: {id}")
+    
+    # Generate the comprehensive report (may raise ValueError)
+    report_text = generate_report(id)
+    
+    # Generate embedding for vector search
+    embedding_result = llm.models.embed_content(
+        model="gemini-embedding-001",
+        contents=[report_text],
+        config=types.EmbedContentConfig(output_dimensionality=768)
+    )
+    
+    # Extract embedding values
+    if hasattr(embedding_result.embeddings[0], 'values'):
+        embedding = list(embedding_result.embeddings[0].values)
+    else:
+        embedding = list(embedding_result.embeddings[0])
+    
+    # Extract location from original incident
+    location = incident.get("location", {})
+    address_text = location.get("address_text", "Unknown location")
+    
+    # Get incident_id from original incident
+    original_incident_id = incident.get("incident_id", "Unknown")
+    
+    # Create the BSON document for concluded_incidents collection
+    concluded_incident_bson = {
+        "original_incident_id": original_incident_id,
+        "concluded_at": datetime.utcnow().isoformat() + "Z",
+        "location": {
+            "address_text": address_text
+        },
+        "final_summary": report_text,
+        "final_summary_embedding": embedding
+    }
+    
+    # Insert the document into the knowledge_base collection
+    insert_result = knowledge_base.insert_one(concluded_incident_bson)
+    concluded_incident_bson["_id"] = str(insert_result.inserted_id)
+    
+    return concluded_incident_bson
 
 
 if __name__ == "__main__":
