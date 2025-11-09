@@ -52,7 +52,7 @@ def add_transcript(id: str, transcript: str, caller: str, convo: str):
         ValueError: If incident not found or update fails
     """
     if not _exists(id):
-        _new_entry(id, transcript, caller)
+        _new_entry(id, transcript, caller, convo)
     else:
         try:
             formatted_transcript = f"{caller}: {transcript}"
@@ -69,7 +69,7 @@ def add_transcript(id: str, transcript: str, caller: str, convo: str):
         except Exception as e:
             raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
     
-def _new_entry(id: str, transcript: str, caller: str):
+def _new_entry(id: str, transcript: str, caller: str, convo: str):
     """
     Create a new incident entry in the database.
     
@@ -104,7 +104,7 @@ def _new_entry(id: str, transcript: str, caller: str):
                 }
             },
             "transcripts": {
-                "911_call": [formatted_transcript]
+                convo: [formatted_transcript]
             },
             "current_summary": "",
             "last_summary_update_at": ""

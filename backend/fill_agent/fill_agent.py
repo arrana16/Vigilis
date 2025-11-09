@@ -247,7 +247,7 @@ def update_dynamic_fields(incident_id: str) -> str:
     current_location = incident_data['location']
     current_severity = incident_data['severity']
     current_summary = incident_data['summary']
-    current_coordinates = incident_data.get('coordinates', [])
+    current_coordinates = incident_data['coordinates']
     transcripts = incident_data['transcripts']
     
     print(f"📝 Current values:")
@@ -316,10 +316,10 @@ Analyze the transcripts and return updates ONLY if there is important new inform
     
     # Geocode the location to get coordinates
     location_to_geocode = new_location if new_location else current_location
-    print(f"🌍 Geocoding location: {location_to_geocode}")
     geocode_data = geocode_address(location_to_geocode)
     longitude = geocode_data["longitude"]
     latitude = geocode_data["latitude"]
+    coords = [longitude, latitude] if longitude and latitude else None
     
     if longitude and latitude:
         print(f"✅ Geocoding successful: ({latitude}, {longitude})")
@@ -333,7 +333,7 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         new_location=new_location,
         new_severity=new_severity,
         new_summary=new_summary,
-        coordinates=(longitude, latitude) if longitude and latitude else None
+        coordinates=coords
     )
     
     # Determine what changed
@@ -346,9 +346,7 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         changes.append(f"severity: '{current_severity}' → '{new_severity}'")
     if new_summary != current_summary:
         changes.append(f"summary updated")
-    if longitude and latitude:
-        if current_coordinates != [longitude, latitude]:
-            changes.append(f"coordinates: {current_coordinates} → [{longitude}, {latitude}]")
+    changes.append(f"coordinates: {current_coordinates} → {coords}")
     
     if changes:
         result = f"""✅ Fields Updated for {incident_id}
@@ -370,11 +368,13 @@ DATABASE RESULT:
 
 
 if __name__ == "__main__":
-    test_incident_id = "76ef9fe2-0252-4637-9654-912b73e552c1"
-    result = update_dynamic_fields(test_incident_id)
-    print("\n" + "="*80)
-    print(result)
-    print("="*80)
+    # test_incident_id = "76ef9fe2-0252-4637-9654-912b73e552c1"
+    # result = update_dynamic_fields(test_incident_id)
+    # print("\n" + "="*80)
+    # print(result)
+    # print("="*80)
+
+    print(geocode_address("Georgia Aquarium, Atlanta, GA"))
 
 
 

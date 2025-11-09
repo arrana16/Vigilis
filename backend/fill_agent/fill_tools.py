@@ -35,9 +35,15 @@ def get_dynamic_fields_func(id: str):
     if not incident:
         return {"error": f"No incident found with ID: {id}"}
     
-    # Get transcripts and concatenate into "key:value, key:value..." format
+    # Get transcripts and concatenate all messages from all conversations
     transcripts_obj = incident.get("transcripts", {})
-    transcripts_str = ", ".join([f"{key}:{value}" for key, value in transcripts_obj.items()])
+    all_transcripts = []
+    for convo_key, messages in transcripts_obj.items():
+        if isinstance(messages, list):
+            all_transcripts.extend(messages)
+        else:
+            all_transcripts.append(str(messages))
+    transcripts_str = " | ".join(all_transcripts)
     
     # Get current coordinates
     location_obj = incident.get("location", {})
@@ -57,7 +63,7 @@ def get_dynamic_fields_func(id: str):
     return result
 
 
-def update_params_func(id: str, new_location: str, new_severity: str, new_summary: str, new_title: str, coordinates: list = None) -> str:
+def update_params_func(id: str, new_location: str, new_severity: str, new_summary: str, new_title: str, coordinates: list) -> str:
     """
     Update the incident parameters in the database.
     
@@ -89,7 +95,7 @@ def update_params_func(id: str, new_location: str, new_severity: str, new_summar
             update_doc["current_summary"] = new_summary
         
         # CRITICAL: Add coordinates to geojson.coordinates (use correct dot notation)
-        if coordinates and len(coordinates) == 2:
+        if coordinates:
             update_doc["location.geojson.coordinates"] = coordinates
             print(f"🗺️  Setting coordinates in update_doc: {coordinates}")
         

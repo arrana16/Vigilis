@@ -4,7 +4,7 @@ Change the GEMINI_MODEL value here to update all AI agents across the system.
 """
 
 # GLOBAL MODEL CONFIGURATION - Universal across all agents
-GEMINI_MODEL = "gemini-2.0-flash-lite"
+GEMINI_MODEL = "gemini-1.5-flash"
 
 # Available models and their characteristics:
 # - "gemini-2.0-flash-lite": Lightweight, fast, good for simple tasks
