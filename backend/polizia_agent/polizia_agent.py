@@ -1,34 +1,70 @@
-from backend.db import update_chat_elements
-from .polizia_tools import update_context
-from google import genai
+
+from .polizia_tools import get_incident_context
+from google.adk.agents import LlmAgent
+from google.adk.tools import FunctionTool
+import google.generativeai as genai
 import os
+import sys
 from dotenv import load_dotenv
-from datetime import datetime
+from db import update_chat_elements
+
+# Add parent directory to path for imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from model_config import GEMINI_MODEL
 
 load_dotenv()
 
-# Force API key mode (not Vertex AI)
-os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = '0'
 
-# Initialize the Gemini client with API key
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-# System instruction for the agent
-SYSTEM_INSTRUCTION = """You are Vigilis, an AI assistant for 911 dispatchers and emergency services personnel. 
+# System instruction for the Vigilis agent
+SYSTEM_INSTRUCTION = """You are Vigilis, an AI assistant for 911 dispatchers and emergency services personnel.
 
 Your role is to:
-- Help dispatchers understand current incidents by retrieving and explaining incident data
-- Answer questions about emergency protocols and procedures
-- Provide context and insights about ongoing situations
+- Answer questions about active incidents by retrieving real-time data from the database
+- Help dispatchers understand incident locations, status, and details
+- Explain transcripts from 911 calls and radio communications
+- Provide context and insights about ongoing emergency situations
 - Assist with incident management decisions
 
-You have access to a tool called 'update_context' that can retrieve incident information from the database. When a user asks about a specific incident, use this tool to get the latest data.
+IMPORTANT: When a user asks about ANY detail of an incident (location, status, summary, transcripts, etc.),
+you MUST call the 'get_incident_context' tool to retrieve the current incident data from the database.
 
-Be professional, concise, and helpful. Your goal is to support emergency services personnel in making fast, informed decisions."""
+Examples of when to call the tool:
+- "Where is the fire?" → Call tool to get location
+- "What's the incident summary?" → Call tool to get current_summary
+- "What did the 911 caller say?" → Call tool to get transcripts 
+- "What's happening?" → Call tool to get all details
+- "What's the status?" → Call tool to get status field
+
+After retrieving the data from the tool, extract the relevant information and provide a clear,
+concise answer focusing on what the dispatcher needs to know.
+
+Be professional, accurate, and helpful. Your goal is to support emergency services personnel
+in making fast, informed decisions during critical situations."""
+
+
+# Create the Vigilis agent using Google ADK
+vigilis_agent = LlmAgent(
+    name="VIGILISAgent",
+    description="AI assistant for 911 dispatchers that retrieves and explains incident data",
+    model=GEMINI_MODEL,
+    instruction=SYSTEM_INSTRUCTION,
+    tools=[FunctionTool(get_incident_context)]  # Wrap the function in FunctionTool
+)
+
+
+# Configure Gemini with API key (using google.generativeai for API key support)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
 
 def chat(message: str, incident_id: str = None) -> str:
     """
-    Send a message to the agent and get a response.
+    Send a message to the Vigilis agent and get a response.
+    
+    This function uses Google ADK's function tool definition with direct Gemini API calls
+    to provide function calling capabilities while maintaining simplicity.
     
     Args:
         message: The user's message/question
@@ -37,61 +73,79 @@ def chat(message: str, incident_id: str = None) -> str:
     Returns:
         The agent's response as a string
     """
-    message_time = datetime.utcnow().isoformat() + "Z"
+    # Prepare the prompt with incident context if provided
     if incident_id:
-        prompt = f"[Current Incident: {incident_id}]\n{message}"
+        prompt = f"[Current Incident ID: {incident_id}]\n\nUser question: {message}"
     else:
         prompt = message
     
-    # Use Gemini with function calling
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt,
-        config=genai.types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            tools=[update_context],
-            temperature=0.7
-        )
+    print(f"\n🔵 VIGILIS Agent processing: {message}")
+    if incident_id:
+        print(f"   Incident ID: {incident_id}")
+    
+    # Define the tool for Gemini function calling
+    tool_config = {
+        "function_declarations": [{
+            "name": "get_incident_context",
+            "description": get_incident_context.__doc__ or "Retrieve detailed incident information from the database",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "incident_id": {
+                        "type": "string",
+                        "description": "The ID of the incident to retrieve (e.g., 'INC-001' or UUID format)"
+                    }
+                },
+                "required": ["incident_id"]
+            }
+        }]
+    }
+    
+    # Create the model with tools
+    model = genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=SYSTEM_INSTRUCTION,
+        tools=[tool_config]
     )
     
-    # Handle function calls if needed
-    while response.candidates[0].content.parts[0].function_call:
+    # Start a chat session for easier multi-turn conversation
+    chat_session = model.start_chat()
+    
+    # Send initial request to Gemini with tools
+    response = chat_session.send_message(prompt)
+    
+    # Check if the model wants to call a function
+    if response.candidates[0].content.parts and hasattr(response.candidates[0].content.parts[0], 'function_call'):
         function_call = response.candidates[0].content.parts[0].function_call
-        function_name = function_call.name
-        function_args = function_call.args
+        
+        print(f"   🔧 Calling tool: {function_call.name}(incident_id={function_call.args['incident_id']})")
         
         # Execute the function
-        if function_name == 'update_context':
-            function_result = update_context(**function_args)
-        else:
-            function_result = f"Unknown function: {function_name}"
+        function_result = get_incident_context(function_call.args['incident_id'])
         
-        # Send function result back to model
-        response = client.models.generate_content(
-            model='gemini-2.5-pro',
-            contents=[
-                prompt,
-                response.candidates[0].content,
-                genai.types.Content(
-                    parts=[genai.types.Part.from_function_response(
-                        name=function_name,
+        # Send the function result back to the model using chat session
+        response = chat_session.send_message(
+            genai.protos.Content(
+                parts=[genai.protos.Part(
+                    function_response=genai.protos.FunctionResponse(
+                        name=function_call.name,
                         response={"result": function_result}
-                    )]
-                )
-            ],
-            config=genai.types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                tools=[update_context],
-                temperature=0.7
+                    )
+                )]
             )
         )
-
-    current_time = datetime.utcnow().isoformat() + "Z"
-    elements = [
-        {"Author": "Caller", "Content": message, "Time": message_time},
-        {"Author": "Polizia", "Content": response.text, "Time": current_time}
-    ]
-
-    update_chat_elements(incident_id, elements)
-                
-    return response.text
+    
+    # Extract the final text response
+    response_text = response.text if hasattr(response, 'text') else ""
+    
+    if not response_text:
+        response_text = "No response generated"
+    
+    print(f"✅ VIGILIS Agent responded ({len(response_text)} chars)\n")
+    
+    # Store in chat elements
+    chat_entry = {"Dispatcher Response": response_text, "Agent": response_text}
+    update_chat_elements(incident_id, chat_entry)
+    
+    # Return the response text
+    return response_text

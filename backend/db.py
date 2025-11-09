@@ -20,7 +20,7 @@ client = MongoClient(
 db = client["dispatch_db"]
 collection = db["active_incidents"]
 
-def exists(id: str) -> bool:
+def _exists(id: str) -> bool:
     """
     Check if id entry exists in the database.
     
@@ -39,7 +39,7 @@ def exists(id: str) -> bool:
     except Exception as e:
         raise ValueError(f"Error checking if incident {id} exists: {str(e)}")
 
-def append_to_transcript(id: str, transcript: str, caller: str):
+def add_transcript(id: str, transcript: str, caller: str, convo: str):
     """
     Update the transcript of an incident in the database.
     
@@ -51,22 +51,29 @@ def append_to_transcript(id: str, transcript: str, caller: str):
     Raises:
         ValueError: If incident not found or update fails
     """
-    try:
-        addition = f"{caller}: {transcript}"
-        result = collection.update_one(
-            {"incident_id": id},
-            {"$set": {f"transcripts.{caller}": addition}}
-        )
-        
-        if result.matched_count == 0:
-            raise ValueError(f"No incident found with ID: {id}")
+    if not _exists(id):
+        _new_entry(id, transcript, caller, convo)
+    else:
+        try:
+            formatted_transcript = f"{caller}: {transcript}"
+            # Use write concern "majority" to ensure write is committed before returning
+            from pymongo import WriteConcern
+            result = collection.with_options(write_concern=WriteConcern("majority")).update_one(
+                {"incident_id": id},
+                {"$push": {f"transcripts.{convo}": formatted_transcript}}
+            )
             
-    except ValueError:
-        raise
-    except Exception as e:
-        raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
+            if result.matched_count == 0:
+                raise ValueError(f"No incident found with ID: {id}")
+                
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
+        
+    return "Transcript added successfully"
     
-def new_entry(id: str, transcript: str, caller: str):
+def _new_entry(id: str, transcript: str, caller: str, convo: str):
     """
     Create a new incident entry in the database.
     
@@ -82,8 +89,10 @@ def new_entry(id: str, transcript: str, caller: str):
         from datetime import datetime
         
         # Check if incident already exists
-        if exists(id):
+        if _exists(id):
             raise ValueError(f"Incident with ID {id} already exists")
+        
+        formatted_transcript = f"{caller}: {transcript}"
         
         entry = {
             "incident_id": id,
@@ -99,7 +108,7 @@ def new_entry(id: str, transcript: str, caller: str):
                 }
             },
             "transcripts": {
-                caller: transcript
+                convo: [formatted_transcript]
             },
             "current_summary": "",
             "last_summary_update_at": ""
@@ -167,3 +176,24 @@ def update_chat_elements(id: str, chat_elements: dict):
     except Exception as e:
         raise ValueError(f"Error updating chat elements for incident {id}: {str(e)}")
 
+def get_current_summary(id: str) -> str:
+    """
+    Retrieve the current summary of an incident from the database.
+    
+    Args:
+        id: The incident ID to retrieve the summary for
+    Returns:
+        The current summary as a string
+    Raises:
+        ValueError: If the incident is not found or database query fails
+    """ 
+    try:
+        incident = collection.find_one({"incident_id": id})
+    except Exception as e:
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
+    
+    if not incident:
+        raise ValueError(f"No incident found with ID: {id}")
+    
+    current_summary = incident.get("current_summary", "")
+    return current_summary

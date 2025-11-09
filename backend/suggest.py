@@ -2,6 +2,7 @@ import sys
 import os
 from dotenv import load_dotenv
 from bson import ObjectId
+from model_config import GEMINI_MODEL
 
 # Load environment variables from .env file
 load_dotenv()
@@ -52,7 +53,7 @@ Transcripts:
 Provide only the summary text, no additional formatting:"""
     
     summary = llm.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
     )
 
@@ -70,10 +71,11 @@ def vectorize_running_summary(text) -> list:
         return result.embeddings[0].values
     return result.embeddings[0] 
 
-def retrieve_similar_stories(vector) -> list:
+def retrieve_similar_stories(vector, similarity_threshold: float = 0.7) -> list:
     """
     Retrieve 2 similar concluded incidents from the vector database 
     based on semantic similarity to the current incident summary.
+    Only returns incidents with similarity score above the threshold.
     """
     pipeline = [
         {
@@ -100,14 +102,16 @@ def retrieve_similar_stories(vector) -> list:
     similar_stories = []
     
     for doc in results:
-        similar_stories.append({
-            "incident_id": doc.get("original_incident_id", "Unknown"),
-            "location": doc.get("location", {}).get("address_text", "Unknown location"),
-            "outcome_type": doc.get("outcome_type", "Unknown outcome"),
-            "summary": doc.get("final_summary", "No summary available"),
-            "concluded_at": doc.get("concluded_at", "Unknown date"),
-            "similarity_score": doc.get("score", 0)
-        })
+        score = doc.get("score", 0)
+        # Only include results above similarity threshold
+        if score >= similarity_threshold:
+            similar_stories.append({
+                "original_incident_id": doc.get("original_incident_id", "Unknown"),
+                "location": doc.get("location", {}).get("address_text", "Unknown location"),
+                "final_summary": doc.get("final_summary", "No summary available"),
+                "concluded_at": doc.get("concluded_at", "Unknown date"),
+                "similarity_score": score
+            })
     
     return similar_stories
 
@@ -117,40 +121,28 @@ def givesuggestions(eventid: str) -> str:
     vector = vectorize_running_summary(text)
     similar_stories = retrieve_similar_stories(vector)
     
-    prompt = f"""You are an expert AI assistant for 911 dispatchers with access to a database of past incident outcomes. Your purpose is to help dispatchers make data-driven decisions by learning from what worked and what didn't in similar situations.
+    # If no similar stories meet the threshold, provide general guidance
+    if not similar_stories:
+        return "No sufficiently similar past incidents found. Proceed with standard protocols and request supervisor guidance if needed."
+    
+    prompt = f"""You are an AI assistant providing data-driven suggestions for 911 dispatchers based on historical incident outcomes.
 
-ROLE: You are an experienced emergency response analyst who has reviewed thousands of incident outcomes. You identify patterns in successful responses and flag approaches that led to complications.
+CRITICAL REQUIREMENTS:
+1. Each ACTION must be 8-12 words - concise and actionable
+2. Each Historical insight must be 7-10 words - dense with data
+3. Extract IDEAS and PATTERNS from past incidents - DO NOT mention incident IDs or reference specific case numbers
+4. Use EXACT formatting with **ACTION:** and **Historical insight:** labels
+5. Focus only on the most impactful actions
 
-CONTEXT: You have two data sources:
-1. CURRENT SITUATION: The live incident unfolding right now
-2. HISTORICAL DATA: Similar past incidents with their complete outcomes, response details, and what happened
+YOUR TASK:
+Analyze the historical data from similar past incidents. Extract ONLY the most critical IDEAS and PATTERNS that apply to the current situation.
 
-CRITICAL TASK: Analyze the historical data to extract SPECIFIC lessons:
-- What actions led to SUCCESSFUL outcomes in similar situations?
-- What mistakes or missed opportunities occurred that should be AVOIDED?
-- What unexpected complications arose that responders should anticipate?
-- What resources or tactics proved most effective?
+- What approaches or tactics led to SUCCESS in similar situations?
+- What strategies or decisions should be AVOIDED based on past failures?
+- What general patterns emerged that are relevant now?
 
-RULES:
-1. LEARN FROM SUCCESS: If a similar incident was resolved well, identify the SPECIFIC actions that contributed (e.g., "Past incident shows that calling for K-9 backup within first 5 minutes reduced search time by 40%")
-
-2. LEARN FROM FAILURE: If a similar incident had complications, explicitly warn about them (e.g., "WARNING: In 2 similar cases, delays in medical dispatch led to worse outcomes - recommend immediate EMT staging")
-
-3. IDENTIFY PATTERNS: Look for recurring themes across similar incidents (e.g., "All 3 similar domestic calls at this address escalated when only 1 unit responded - recommend 2-unit dispatch")
-
-4. BE SPECIFIC WITH DATA: Reference the historical outcomes directly (e.g., "Similar incident #X resolved in 12 minutes when supervisor arrived early vs. 45 minutes without supervisor")
-
-5. ACTIONABLE + EVIDENCE-BASED: Every suggestion must cite WHY based on historical data (e.g., "Dispatch traffic control [BECAUSE: Past incident at this intersection had 2 secondary accidents due to rubbernecking]")
-
-6. HIGHLIGHT UNIQUE INSIGHTS: Focus on non-obvious patterns that only emerge from analyzing past data (not generic best practices)
-
-OUTPUT FORMAT: Provide 3-5 numbered suggestions. Each suggestion should have:
-- The ACTION to take
-- The REASON based on historical data (what worked/didn't work before)
-
-Example format:
-1. [ACTION] - Historical insight: [What happened in similar past incidents and why this matters]
-2. [ACTION] - Historical insight: [Pattern observed across multiple incidents]
+IMPORTANT: Reference IDEAS and PATTERNS only (e.g., "early backup reduced response times", "delaying medical support worsened outcomes"). 
+DO NOT mention incident IDs, case numbers, or specific incident references.
 
 CURRENT SITUATION:
 {text}
@@ -158,16 +150,28 @@ CURRENT SITUATION:
 HISTORICAL DATA FROM SIMILAR PAST INCIDENTS:
 {similar_stories}
 
-Analyze the historical outcomes and provide data-driven suggestions:"""
+OUTPUT FORMAT:
+Provide 3-5 suggestions. Each suggestion MUST follow this EXACT format:
+**ACTION:** [8-12 word actionable directive]
+**Historical insight:** [7-10 word pattern or idea from past incidents]
+
+Example format:
+**ACTION:** Dispatch two units immediately instead of one for domestic calls
+**Historical insight:** Multiple responders prevented escalation in similar volatile situations
+
+**ACTION:** Request K-9 backup within first five minutes of search operations
+**Historical insight:** Early specialized backup significantly reduced search duration times
+
+Generate suggestions now (reference ideas/patterns only, NO incident IDs):"""
 
     response = llm.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
     )
     return response.text
 
 if __name__ == "__main__":
-    id = "F251107-0124"
+    id = "af9a64a1-c6d0-4aca-818b-09a2ad4fa4f2"
     # id = "690eb0a52e8f17ecb7b23e81"
     suggestions = givesuggestions(id)
     print("Suggestions:")
