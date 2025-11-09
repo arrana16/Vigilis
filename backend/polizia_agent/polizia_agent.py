@@ -141,5 +141,9 @@ def chat(message: str, incident_id: str = None) -> str:
   
    print(f"✅ VIGILIS Agent responded ({len(response_text)} chars)\n")
 
-   response_text = {"Dispatcher Response": response_text, "Agent": response_text}
-   update_chat_elements(incident_id, response_text)
+   # Store in chat elements
+   chat_entry = {"Dispatcher Response": response_text, "Agent": response_text}
+   update_chat_elements(incident_id, chat_entry)
+   
+   # Return the response text
+   return response_text
