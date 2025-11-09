@@ -8,6 +8,6 @@ GEMINI_MODEL = "gemini-2.0-flash"
 
 # Available models and their characteristics:
 # - "gemini-2.0-flash-lite": Lightweight, fast, good for simple tasks
-# - "gemini-1.5-flash": Higher free tier (1500 req/day), balanced performance
+# - "gemini-1.5-flash": Higher free tierssd (1500 req/day), balanced performance
 # - "gemini-1.5-pro": Most capable, but lower free tier limits
 # - "gemini-2.0-flash-exp": Experimental, limited free tier (50 req/day)
