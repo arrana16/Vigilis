@@ -112,3 +112,58 @@ def new_entry(id: str, transcript: str, caller: str):
     except Exception as e:
         raise ValueError(f"Error creating new incident {id}: {str(e)}")
 
+
+def retrieve_chat_elements(id: str) -> dict:
+    """
+    Retrieve the incident document from MongoDB and return chat_elements field as a dictionary.
+    
+    Args:
+        id: The incident ID to retrieve from the database
+    Returns:
+        A dictionary containing chat_elements from the incident document 
+    Raises:
+        ValueError: If the incident is not found or database query fails
+    """ 
+    try:
+        incident = collection.find_one({"incident_id": id})
+    except Exception as e:
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
+    
+    if not incident:
+        raise ValueError(f"No incident found with ID: {id}")
+    
+    # Get chat elements
+    chat_elements = incident.get("chat_elements", {})
+    
+    # Build result dictionary
+    result = {
+        "chat_elements": chat_elements
+    }
+    
+    return result
+
+def update_chat_elements(id: str, chat_elements: dict):
+    """
+    Update the chat_elements field of an incident in the database.
+    
+    Args:
+        id: The ID of the incident to update
+        chat_elements: The new chat elements dictionary
+    
+    Raises:
+        ValueError: If incident not found or update fails
+    """
+    try:
+        result = collection.update_one(
+            {"incident_id": id},
+            {"$push": {"chat_elements": chat_elements}}
+        )
+        
+        if result.matched_count == 0:
+            raise ValueError(f"No incident found with ID: {id}")
+            
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Error updating chat elements for incident {id}: {str(e)}")
+

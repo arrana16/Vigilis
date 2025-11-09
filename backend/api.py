@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -14,9 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded, post_story
 from fill_agent.fill_agent import analyze_incident
-from polizia_agent.tools import update_context
-from polizia_agent.agent import chat
-from db import exists, new_entry, append_to_transcript
+from polizia_agent.polizia_tools import update_context
+from polizia_agent.polizia_agent import chat
+from db import exists, new_entry, append_to_transcript, retrieve_chat_elements
 from police_cars import (
     PoliceCar, 
     PoliceCarStatus,
@@ -160,6 +160,7 @@ def root():
             "POST /incident/new": "Create a new incident entry",
             "POST /incident/append": "Append transcript to existing incident",
             "GET /incident/exists/{incident_id}": "Check if incident exists",
+            "GET /incident/chat_elements/{incident_id}": "Get chat elements for incident",
             "POST /incident/context": "Get incident context (BSON)",
             "POST /incident/summary": "Get incident summary",
             "POST /incident/suggestions": "Get AI suggestions for incident",
@@ -271,6 +272,22 @@ def check_incident_exists(incident_id: str):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/incident/chat_elements/{incident_id}")
+def get_chat_elements(incident_id: str):
+    """
+    Get chat_elements field from an incident
+    """
+    try:
+        result = retrieve_chat_elements(incident_id)
+        return {
+            "incident_id": incident_id,
+            "chat_elements": result["chat_elements"]
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -831,10 +848,10 @@ def remove_car_from_simulator(car_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
     import uvicorn
