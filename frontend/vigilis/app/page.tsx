@@ -1,27 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { incidents, Incident } from "./components/Sidebar";
+import { IncidentFrontend } from "./lib/types";
+import { getAllIncidents } from "./lib/api";
 import DetailPage from "./components/DetailPage";
-import dynamic from "next/dynamic";
 import mapboxgl from "mapbox-gl";
 
-// Dynamically import Map to avoid SSR issues
-const Map = dynamic(() => import("./components/map/Map"), { ssr: false });
-
 // Mock incident locations in Atlanta area
-const incidentLocations: Record<string, [number, number]> = {
-	"1": [-84.388, 33.749], // Downtown Atlanta
-	"2": [-84.3933, 33.7726], // Midtown (near Bobby Dodd)
-};
+const incidentLocations: Record<string, [number, number]> = {};
 
 // Map ref declared outside component body scope is not valid; keep inside but before effects using it.
 export default function Home() {
 	// Map instance (declare first so effects can reference it)
 	const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
-	const [activeIncidentId, setActiveIncidentId] = useState<string>(
-		incidents[0]?.id || ""
-	);
+	const [incidents, setIncidents] = useState<IncidentFrontend[]>([]);
+	const [incidentsError, setIncidentsError] = useState<string | null>(null);
+	const [activeIncidentId, setActiveIncidentId] = useState<string>("");
 	const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(
 		null
 	);
@@ -80,7 +74,7 @@ export default function Home() {
 	const handleIncidentClick = useCallback(
 		(incidentId: string) => {
 			setActiveIncidentId(incidentId);
-			setExpandedIncidentId((prev) =>
+			setExpandedIncidentId((prev: string | null) =>
 				prev === incidentId ? null : incidentId
 			);
 
@@ -116,8 +110,38 @@ export default function Home() {
 		setHoveredIncidentId(null);
 	}, []);
 
-	const activeIncident =
-		incidents.find((inc) => inc.id === activeIncidentId) || incidents[0];
+	const activeIncident = incidents.find(
+		(inc: IncidentFrontend) => inc.id === activeIncidentId
+	);
+
+	// Initial load of incidents
+	useEffect(() => {
+		let mounted = true;
+		getAllIncidents()
+			.then((data) => {
+				if (!mounted) return;
+				setIncidents(data);
+				setIncidentsError(null);
+				if (!activeIncidentId && data.length) {
+					setActiveIncidentId(data[0].id);
+				}
+				// Populate location cache
+				data.forEach((inc) => {
+					const coords = inc.location?.geojson?.coordinates;
+					if (Array.isArray(coords) && coords.length >= 2) {
+						incidentLocations[inc.id] = [coords[0], coords[1]];
+					}
+				});
+			})
+			.catch((err) => {
+				if (!mounted) return;
+				console.error("Failed to load incidents", err);
+				setIncidentsError(err.message || "Failed to load incidents");
+			});
+		return () => {
+			mounted = false;
+		};
+	}, [activeIncidentId]);
 
 	// Fade-in detail page once loaded
 	if (showDetail) {
@@ -145,7 +169,7 @@ export default function Home() {
 		);
 	}
 
-	const getSeverityColor = (severity: string) => {
+	const getSeverityColor = (severity: string): string => {
 		switch (severity) {
 			case "high":
 				return "#FF4444";
@@ -158,7 +182,7 @@ export default function Home() {
 		}
 	};
 
-	const getSeverityLabel = (severity: string) => {
+	const getSeverityLabel = (severity: string): string => {
 		switch (severity) {
 			case "high":
 				return "HIGH SEVERITY";
@@ -236,14 +260,28 @@ export default function Home() {
 			)}
 			{/* Full-Screen Map Background */}
 			<div className="absolute inset-0">
-				<IncidentMapView
-					incidents={incidents}
-					incidentLocations={incidentLocations}
-					activeIncidentId={activeIncidentId}
-					hoveredIncidentId={hoveredIncidentId}
-					onMapReady={setMapInstance}
-					onMarkerClick={handleIncidentClick}
-				/>
+				{incidentsError && incidents.length === 0 && (
+					<div className="absolute top-4 left-4 z-20 bg-red-600/80 text-white text-xs px-3 py-2 rounded shadow">
+						<span className="font-semibold">Error:</span>{" "}
+						{incidentsError}
+						<button
+							onClick={() => setActiveIncidentId("")}
+							className="ml-3 underline"
+						>
+							Retry
+						</button>
+					</div>
+				)}
+				{incidents.length > 0 && (
+					<IncidentMapView
+						incidents={incidents}
+						incidentLocations={incidentLocations}
+						activeIncidentId={activeIncidentId}
+						hoveredIncidentId={hoveredIncidentId}
+						onMapReady={setMapInstance}
+						onMarkerClick={handleIncidentClick}
+					/>
+				)}
 			</div>
 
 			{/* Top Gradient Header with Branding */}
@@ -283,7 +321,7 @@ export default function Home() {
 			{/* Floating Incident Cards (Frosted) */}
 			<div className="absolute left-6 top-32 bottom-6 w-80 z-10 flex flex-col gap-3">
 				<div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent space-y-3">
-					{incidents.map((incident) => {
+					{incidents.map((incident: IncidentFrontend) => {
 						const isActive = activeIncidentId === incident.id;
 						const isHovered = hoveredIncidentId === incident.id;
 						const isExpanded = expandedIncidentId === incident.id;
@@ -492,7 +530,7 @@ export default function Home() {
 
 // Separate component for the map view
 interface IncidentMapViewProps {
-	incidents: Incident[];
+	incidents: IncidentFrontend[];
 	incidentLocations: Record<string, [number, number]>;
 	activeIncidentId: string;
 	hoveredIncidentId: string | null;

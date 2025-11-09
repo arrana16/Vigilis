@@ -2,13 +2,15 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import EmbeddedMap from "./map/EmbeddedMapLoader";
-import { Incident } from "./Sidebar";
+import type { FrontendIncident } from "../lib/types";
 import type { PoliceOfficer } from "./map/EmbeddedMap";
 import { fetchRouteToIncident } from "./map/EmbeddedMap";
+import { getIncidentSummary, getIncidentSuggestions } from "../lib/api";
 
 interface DetailPageProps {
-	incident: Incident;
+	incident: FrontendIncident;
 	onBack: () => void;
 }
 
@@ -60,9 +62,66 @@ const DetailPage: React.FC<DetailPageProps> = ({ incident, onBack }) => {
 		duration: number;
 	} | null>(null);
 
-	// Example incident location - Bobby Dodd Stadium for demonstration
-	// In production, this would come from the incident data
-	const incidentLocation: [number, number] = [-84.3933, 33.7726];
+	// Fetch AI summary and suggestions for this incident
+	const { data: aiSummary, isLoading: summaryLoading } = useQuery({
+		queryKey: ["incident-summary", incident.id],
+		queryFn: () => getIncidentSummary(incident.incident_id),
+		staleTime: 60000, // Cache for 1 minute
+	});
+
+	const { data: aiSuggestionsRaw, isLoading: suggestionsLoading } = useQuery({
+		queryKey: ["incident-suggestions", incident.id],
+		queryFn: () => getIncidentSuggestions(incident.incident_id),
+		staleTime: 60000, // Cache for 1 minute
+	});
+
+	// Parse AI suggestions into structured format for UI
+	const parsedSuggestions = React.useMemo(() => {
+		if (!aiSuggestionsRaw) return [];
+
+		// Split by numbered items (1., 2., 3., etc.)
+		const items = aiSuggestionsRaw
+			.split(/\n\d+\.\s+/)
+			.filter((item) => item.trim());
+
+		return items.map((item, index) => {
+			// Extract action and historical insight using non-'s' flag for compatibility
+			const actionMatch = item.match(
+				/\*\*ACTION:\*\*\s*(.+?)(?=\n\s+\*|$)/
+			);
+			const insightMatch = item.match(
+				/\*\*Historical insight:\*\*\s*(.+?)$/
+			);
+
+			const actionText = actionMatch
+				? actionMatch[1].trim()
+				: item.trim();
+			const insight = insightMatch ? insightMatch[1].trim() : "";
+
+			// Extract just the first sentence for the short action
+			const shortAction = actionText.split(".")[0] + ".";
+
+			return {
+				id: `ai-suggestion-${index + 1}`,
+				title: `AI Recommendation ${index + 1}`,
+				action: shortAction,
+				details: actionText, // Full action text
+				context: insight, // Historical context
+				source: "AI Analysis | Based on similar historical incidents",
+				priority: (index === 0
+					? "high"
+					: index === 1
+					? "medium"
+					: "low") as "high" | "medium" | "low",
+			};
+		});
+	}, [aiSuggestionsRaw]);
+
+	// Use real incident location from MongoDB
+	const incidentLocation: [number, number] = [
+		incident.location.geojson.coordinates[0],
+		incident.location.geojson.coordinates[1],
+	];
 
 	// Example police officers near the incident
 	// Positioned on roads around the area, not at the incident location
@@ -886,81 +945,97 @@ const DetailPage: React.FC<DetailPageProps> = ({ incident, onBack }) => {
 								{/* Pinned Header */}
 								<div className="flex flex-col gap-2 p-6 pb-4 border-b border-d-os2/20">
 									<p className="text-2xl text-white tracking-[-1.2px]">
-										Next Suggestions
+										AI Suggestions
 									</p>
 									<p className="text-xs text-white/50 tracking-[-0.6px]">
-										Click on any suggestion for detailed
-										information and historical context
+										AI-powered recommendations based on
+										similar incidents
 									</p>
 								</div>
 								{/* Scrollable Content */}
 								<div className="flex-1 overflow-auto p-6">
-									<div className="flex flex-col gap-3">
-										{suggestionItems.map((suggestion) => (
-											<div
-												key={suggestion.id}
-												onClick={() =>
-													setSelectedSuggestion(
-														suggestion
-													)
-												}
-												className={`border rounded-2xl p-4 cursor-pointer transition-all hover:border-d-p hover:bg-d-p/5 ${
-													suggestion.priority ===
-													"high"
-														? "border-d-rl/50 bg-d-rl/5"
-														: suggestion.priority ===
-														  "medium"
-														? "border-d-s/50 bg-d-s/5"
-														: "border-d-os2 bg-white/5"
-												}`}
-											>
-												<div className="flex items-start justify-between gap-3 mb-2">
-													<div className="flex-1">
-														<div className="flex items-center gap-2 mb-1">
-															<span
-																className={`px-2 py-0.5 rounded text-xs font-semibold tracking-[-0.6px] ${
-																	suggestion.priority ===
-																	"high"
-																		? "bg-d-rl/20 text-d-rl"
-																		: suggestion.priority ===
-																		  "medium"
-																		? "bg-d-s/20 text-d-s"
-																		: "bg-white/10 text-white/50"
-																}`}
-															>
-																{suggestion.priority.toUpperCase()}
-															</span>
-														</div>
-														<p className="text-base text-white font-semibold tracking-[-0.8px] mb-1">
-															{suggestion.title}
-														</p>
-														<p className="text-sm text-white/70 tracking-[-0.6px]">
-															{suggestion.action}
-														</p>
-													</div>
-													<svg
-														className="w-5 h-5 text-white/30 flex-shrink-0 mt-1"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d="M9 5l7 7-7 7"
-														/>
-													</svg>
-												</div>
-											</div>
-										))}
-										<div className="pt-6 mt-6 border-t border-d-os2/20">
-											<p className="text-xs text-white/50 tracking-[-0.6px]">
-												Last Updated:{" "}
-												{incident.lastUpdated}
+									{suggestionsLoading ? (
+										<div className="flex items-center justify-center h-full">
+											<p className="text-sm text-white/50 tracking-[-0.6px]">
+												Loading AI suggestions...
 											</p>
 										</div>
-									</div>
+									) : parsedSuggestions.length > 0 ? (
+										<div className="flex flex-col gap-3">
+											{parsedSuggestions.map(
+												(suggestion) => (
+													<div
+														key={suggestion.id}
+														onClick={() =>
+															setSelectedSuggestion(
+																suggestion
+															)
+														}
+														className={`border rounded-2xl p-4 cursor-pointer transition-all hover:border-d-p hover:bg-d-p/5 ${
+															suggestion.priority ===
+															"high"
+																? "border-d-rl/50 bg-d-rl/5"
+																: suggestion.priority ===
+																  "medium"
+																? "border-d-s/50 bg-d-s/5"
+																: "border-d-os2 bg-white/5"
+														}`}
+													>
+														<div className="flex items-start justify-between gap-3 mb-2">
+															<div className="flex-1">
+																<div className="flex items-center gap-2 mb-1">
+																	<span
+																		className={`px-2 py-0.5 rounded text-xs font-semibold tracking-[-0.6px] ${
+																			suggestion.priority ===
+																			"high"
+																				? "bg-d-rl/20 text-d-rl"
+																				: suggestion.priority ===
+																				  "medium"
+																				? "bg-d-s/20 text-d-s"
+																				: "bg-white/10 text-white/50"
+																		}`}
+																	>
+																		{suggestion.priority.toUpperCase()}
+																	</span>
+																</div>
+																<p className="text-base text-white font-semibold tracking-[-0.8px] mb-1">
+																	{
+																		suggestion.title
+																	}
+																</p>
+																<p className="text-sm text-white/70 tracking-[-0.6px]">
+																	{
+																		suggestion.action
+																	}
+																</p>
+															</div>
+															<svg
+																className="w-5 h-5 text-white/30 flex-shrink-0 mt-1"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	strokeWidth={
+																		2
+																	}
+																	d="M9 5l7 7-7 7"
+																/>
+															</svg>
+														</div>
+													</div>
+												)
+											)}
+										</div>
+									) : (
+										<div className="flex items-center justify-center h-full">
+											<p className="text-sm text-white/50 tracking-[-0.6px]">
+												No suggestions available
+											</p>
+										</div>
+									)}
 								</div>
 							</div>
 						</div>
@@ -983,30 +1058,37 @@ const DetailPage: React.FC<DetailPageProps> = ({ incident, onBack }) => {
 										Summary
 									</p>
 									<p className="text-sm text-white/80 tracking-[-0.6px] leading-relaxed mb-4">
-										Incident overview and key findings based
-										on current information.
+										AI-generated incident summary based on
+										current information.
 									</p>
 									<div className="space-y-4">
-										<div className="border-l-4 border-d-p bg-white/5 rounded-lg p-4">
-											<p className="text-xs text-white/50 tracking-[-0.6px] uppercase mb-2">
-												Initial Assessment
-											</p>
-											<p className="text-sm text-white tracking-[-0.6px]">
-												Multiple reports of disturbance
-												at Bobby Dodd Stadium. Crowd
-												estimated at 1,200+ attendees.
-												Scene requires immediate safety
-												assessment and systematic
-												triage.
-											</p>
-										</div>
+										{summaryLoading ? (
+											<div className="border-l-4 border-d-s bg-white/5 rounded-lg p-4">
+												<p className="text-sm text-white/50 tracking-[-0.6px]">
+													Loading AI summary...
+												</p>
+											</div>
+										) : aiSummary ? (
+											<div className="border-l-4 border-d-p bg-white/5 rounded-lg p-4">
+												<p className="text-xs text-white/50 tracking-[-0.6px] uppercase mb-2">
+													AI Summary
+												</p>
+												<p className="text-sm text-white tracking-[-0.6px] whitespace-pre-wrap leading-relaxed">
+													{aiSummary}
+												</p>
+											</div>
+										) : (
+											<div className="border-l-4 border-d-rl bg-white/5 rounded-lg p-4">
+												<p className="text-sm text-white/50 tracking-[-0.6px]">
+													Summary unavailable
+												</p>
+											</div>
+										)}
 										<div className="border-l-4 border-d-s bg-white/5 rounded-lg p-4">
 											<p className="text-xs text-white/50 tracking-[-0.6px] uppercase mb-2">
 												Current Status
 											</p>
 											<p className="text-sm text-white tracking-[-0.6px]">
-												{suggestionItems.length}{" "}
-												priority actions identified.{" "}
 												{
 													policeOfficers.filter(
 														(o) => o.dispatched

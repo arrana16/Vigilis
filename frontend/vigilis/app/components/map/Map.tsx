@@ -2,7 +2,6 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import MapboxClient from "@mapbox/mapbox-sdk";
 import * as turf from "@turf/turf";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -113,7 +112,8 @@ async function addRouteToMap(map: mapboxgl.Map) {
 		// Cinematic animation setup
 		const animationDuration = 5000; // 5 seconds
 		const startTime = Date.now();
-		let animationFrame: number;
+		// Animation frame handle intentionally unused (kept for future cancellation logic)
+		let animationFrame: number | undefined;
 
 		// Camera smoothing via LERP
 		let cameraPosition: [number, number] | null = null;
@@ -392,12 +392,17 @@ const Map: React.FC<MapProps> = ({ incidentLocation }) => {
 			let labelLayerId = "";
 
 			for (let i = layers.length - 1; i >= 0; i--) {
-				if (
-					layers[i].type === "symbol" &&
-					layers[i].layout!["text-field"]
-				) {
-					labelLayerId = layers[i].id;
-					break;
+				const layer = layers[i] as mapboxgl.AnyLayer;
+				if (layer.type === "symbol") {
+					const layout = (
+						layer as unknown as {
+							layout?: { [k: string]: unknown };
+						}
+					).layout;
+					if (layout && typeof layout["text-field"] !== "undefined") {
+						labelLayerId = layer.id;
+						break;
+					}
 				}
 			}
 
@@ -585,9 +590,9 @@ const Map: React.FC<MapProps> = ({ incidentLocation }) => {
 
 			// Add incident marker if location is provided, otherwise add route animation
 			if (incidentLocation) {
-				addIncidentMarker(map.current, incidentLocation);
+				addIncidentMarker(map.current!, incidentLocation);
 			} else {
-				addRouteToMap(map.current);
+				addRouteToMap(map.current!);
 			}
 		});
 
@@ -604,6 +609,8 @@ const Map: React.FC<MapProps> = ({ incidentLocation }) => {
 				map.current.remove();
 			}
 		};
+		// Dependencies intentionally omitted to mimic initial mount only behavior.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	// Handle tilt with arrow keys
