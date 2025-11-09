@@ -328,13 +328,23 @@ def get_stats():
 
 
 @app.post("/incident/update_transcript")
-def add_incident_transcript(request: AddTranscriptRequest):
+async def add_incident_transcript(request: AddTranscriptRequest):
    """
    Add transcript to an incident. 
    Creates a new incident if it doesn't exist, or appends to existing incident.
    """
    try:
        add_transcript(request.incident_id, request.transcript, request.caller)
+       
+       # Trigger fill agent analysis (with rate limiting built-in)
+       try:
+           update_dynamic_fields(incident_id=request.incident_id)
+       except Exception as e:
+           print(f"Error analyzing incident {request.incident_id}: {e}")
+       
+       # Broadcast to all connected WebSocket clients
+       await manager.broadcast("data_updated")
+       
        return {
            "status": "success",
            "message": f"Transcript added to incident {request.incident_id}",
