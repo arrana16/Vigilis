@@ -1,7 +1,7 @@
 import sys
 import os
-from bson import ObjectId
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -11,20 +11,14 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
 from db import client
-from google import genai
-from google.genai import types
-
-db = client["dispatch_db"]
-collection = db["active_incidents"]
-knowledge_base = db["incident_knowledge_base"]
-llm = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+from google.adk.tools import FunctionTool
 
 # MongoDB setup
 db = client["dispatch_db"]
 collection = db["active_incidents"]
 
 
-def get_dynamic_fields(id: str):
+def get_dynamic_fields_func(id: str):
     """
     Retrieve specific dynamic fields from the incident BSON document.
     
@@ -32,16 +26,14 @@ def get_dynamic_fields(id: str):
         id: The incident ID as a string to look up.
     Returns:
         Dictionary with transcripts (concatenated string), location, severity, and summary.
-    Raises:
-        ValueError: If the incident is not found.
     """
     try:
         incident = collection.find_one({"incident_id": id})
     except Exception as e:
-        raise ValueError(f"Error querying incident with ID {id}: {e}")
+        return {"error": f"Error querying incident with ID {id}: {e}"}
     
     if not incident:
-        raise ValueError(f"No incident found with ID: {id}")
+        return {"error": f"No incident found with ID: {id}"}
     
     # Get transcripts and concatenate into "key:value, key:value..." format
     transcripts_obj = incident.get("transcripts", {})
@@ -49,6 +41,7 @@ def get_dynamic_fields(id: str):
     
     # Build result dictionary
     result = {
+        "title": incident.get("title", ""),
         "transcripts": transcripts_str,
         "location": incident.get("location", {}).get("address_text", ""),
         "severity": incident.get("severity", ""),
@@ -58,7 +51,7 @@ def get_dynamic_fields(id: str):
     return result
 
 
-def update_params(id: str, new_location: str, new_severity: str, new_summary: str) -> str:
+def update_params_func(id: str, new_location: str, new_severity: str, new_summary: str, new_title: str) -> str:
     """
     Update the incident parameters in the database.
     
@@ -67,21 +60,15 @@ def update_params(id: str, new_location: str, new_severity: str, new_summary: st
         new_location: The new location string to update to
         new_severity: The new severity string to update to
         new_summary: The new summary string to update to
+        new_title: The new title string to update to
     
     Returns:
         Confirmation message as a string
-    
-    Raises:
-        ValueError: If the incident is not found or update fails
     """
     try:
-        from datetime import datetime
-        
         # Build update document
-
-
-
         update_doc = {
+            **({"title": new_title} if new_title else {}),
             **({"location.address_text": new_location} if new_location else {}),
             **({"severity": new_severity.lower()} if new_severity else {}),
             **({"current_summary": new_summary} if new_summary else {}),
@@ -95,9 +82,10 @@ def update_params(id: str, new_location: str, new_severity: str, new_summary: st
         )
         
         if result.matched_count == 0:
-            raise ValueError(f"No incident found with ID: {id}")
+            return f"❌ No incident found with ID: {id}"
         
         return f"✅ Successfully updated incident {id} - Location: {new_location}, Severity: {new_severity}, Summary updated"
         
     except Exception as e:
-        raise ValueError(f"Error updating incident {id}: {e}")
+        return f"❌ Error updating incident {id}: {e}"
+

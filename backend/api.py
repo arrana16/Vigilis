@@ -39,10 +39,10 @@ manager = ConnectionManager()
 # Import your existing functions
 from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded, post_story
-from fill_agent.fill_agent import analyze_incident
+from fill_agent.fill_agent import update_dynamic_fields
 from polizia_agent.polizia_tools import update_context
 from polizia_agent.polizia_agent import chat
-from db import add_transcript, retrieve_chat_elements
+from db import add_transcript, retrieve_chat_elements, get_current_summary
 from police_cars import (
    PoliceCar,
    PoliceCarStatus,
@@ -205,7 +205,7 @@ def root():
            "POST /incident/summary": "Get incident summary",
            "POST /incident/suggestions": "Get AI suggestions for incident",
            "POST /incident/report": "Generate incident report",
-           "POST /incident/fill_agent": "Use AI agent to detect deviations in location/severity from transcripts",
+        #    "POST /incident/fill_agent": "Use AI agent to detect deviations in location/severity from transcripts",
            "POST /incident/conclude": "Conclude incident and save to knowledge base",
            "PUT /incident/status": "Update incident status to concluded",
            "POST /police/cars": "Create a new police car",
@@ -334,7 +334,7 @@ def add_incident_transcript(request: AddTranscriptRequest):
    Creates a new incident if it doesn't exist, or appends to existing incident.
    """
    try:
-       add_transcript(request.incident_id, request.transcript, request.caller)
+       update_dynamic_fields(request.incident_id, request.transcript, request.caller)
        return {
            "status": "success",
            "message": f"Transcript added to incident {request.incident_id}",
@@ -390,7 +390,7 @@ def get_incident_summary(request: IncidentRequest):
    Get a concise summary of the current incident status
    """
    try:
-       summary = summarize_current_status(request.incident_id)
+       summary = get_current_summary(request.incident_id)
        return {"incident_id": request.incident_id, "summary": summary}
    except ValueError as e:
        raise HTTPException(status_code=404, detail=str(e))
@@ -426,24 +426,24 @@ def generate_incident_report(request: IncidentRequest):
        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/incident/fill_agent")
-def fill_fields_with_agent(request: IncidentRequest):
-   """
-   Use AI agent to detect deviations between transcripts and current location/severity fields.
-   The agent will only update fields when genuine deviations are detected.
-   """
-   try:
-       # Run the agent analysis - single call
-       agent_response = analyze_incident(request.incident_id)
+# @app.post("/incident/fill_agent")
+# def fill_fields_with_agent(request: IncidentRequest):
+#    """
+#    Use AI agent to detect deviations between transcripts and current location/severity fields.
+#    The agent will only update fields when genuine deviations are detected.
+#    """
+#    try:
+#        # Run the agent analysis - single call
+#        agent_response = update_dynamic_fields(request.incident_id)
       
-       return {
-           "incident_id": request.incident_id,
-           "message": agent_response
-       }
-   except ValueError as e:
-       raise HTTPException(status_code=404, detail=str(e))
-   except Exception as e:
-       raise HTTPException(status_code=500, detail=str(e))
+#        return {
+#            "incident_id": request.incident_id,
+#            "message": agent_response
+#        }
+#    except ValueError as e:
+#        raise HTTPException(status_code=404, detail=str(e))
+#    except Exception as e:
+#        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/incident/post_story")
@@ -962,14 +962,22 @@ async def notify_clients_from_trigger(request: Request):
    expected_secret = os.getenv("WEBSOCKET_SECRET")
    provided_secret = request.headers.get('x-trigger-secret')
 
-
    if not expected_secret or provided_secret != expected_secret:
        raise HTTPException(status_code=401, detail="Unauthorized")
 
+   # Parse the JSON payload to get incident_id
+   payload = await request.json()
+   incident_id = payload.get("incident_id")
+   
+   if incident_id:
+       # Run the fill agent analysis
+       try:
+           analyze_incident(incident_id=incident_id)
+       except Exception as e:
+           print(f"Error analyzing incident {incident_id}: {e}")
 
    # Broadcast to all connected clients
    await manager.broadcast("data_updated")
-
 
    return {"message": "Notification sent to all clients"}
 

@@ -172,3 +172,24 @@ def update_chat_elements(id: str, chat_elements: dict):
     except Exception as e:
         raise ValueError(f"Error updating chat elements for incident {id}: {str(e)}")
 
+def get_current_summary(id: str) -> str:
+    """
+    Retrieve the current summary of an incident from the database.
+    
+    Args:
+        id: The incident ID to retrieve the summary for
+    Returns:
+        The current summary as a string
+    Raises:
+        ValueError: If the incident is not found or database query fails
+    """ 
+    try:
+        incident = collection.find_one({"incident_id": id})
+    except Exception as e:
+        raise ValueError(f"Error querying incident with ID {id}: {e}")
+    
+    if not incident:
+        raise ValueError(f"No incident found with ID: {id}")
+    
+    current_summary = incident.get("current_summary", "")
+    return current_summary

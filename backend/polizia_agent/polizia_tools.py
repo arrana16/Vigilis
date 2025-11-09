@@ -1,7 +1,6 @@
 import sys
 import os
 from dotenv import load_dotenv
-from bson import ObjectId
 import json
 
 # Load environment variables
@@ -13,11 +12,12 @@ sys.path.insert(0, parent_dir)
 
 # Import database
 from db import client
+from google.adk.tools import FunctionTool
 
 db = client["dispatch_db"]
 collection = db["active_incidents"]
 
-def update_context(id: str) -> str:
+def update_context_func(id: str) -> str:
     """
     Retrieve the incident document from MongoDB and return it as a formatted string.
     
@@ -26,17 +26,14 @@ def update_context(id: str) -> str:
         
     Returns:
         A JSON string containing the full incident document with all details
-        
-    Raises:
-        ValueError: If incident is not found or database query fails
     """
     try:
         incident = collection.find_one({"incident_id": id})
     except Exception as e:
-        raise ValueError(f"Error querying incident with ID {id}: {e}")
+        return json.dumps({"error": f"Error querying incident with ID {id}: {e}"})
     
     if not incident:
-        raise ValueError(f"No incident found with ID: {id}")
+        return json.dumps({"error": f"No incident found with ID: {id}"})
     
     # Convert ObjectId to string for JSON serialization
     if "_id" in incident:
@@ -44,3 +41,7 @@ def update_context(id: str) -> str:
     
     # Return the BSON document as a formatted string
     return json.dumps(incident, indent=2, default=str)
+
+
+# Create FunctionTool instance
+update_context = FunctionTool(func=update_context_func)
