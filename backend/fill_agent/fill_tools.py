@@ -74,19 +74,24 @@ def update_params_func(id: str, new_location: str, new_severity: str, new_summar
     """
     try:
         # Build update document
-        update_doc = {
-            **({"title": new_title} if new_title else {}),
-            **({"location.address_text": new_location} if new_location else {}),
-            **({"severity": new_severity.lower()} if new_severity else {}),
-            **({"current_summary": new_summary} if new_summary else {})
-        }
+        update_doc = {}
         
-        # Add coordinates to geojson if provided
+        if new_title:
+            update_doc["title"] = new_title
+        
+        if new_location:
+            update_doc["location.address_text"] = new_location
+        
+        if new_severity:
+            update_doc["severity"] = new_severity.lower()
+        
+        if new_summary:
+            update_doc["current_summary"] = new_summary
+        
+        # CRITICAL: Add coordinates to geojson.coordinates (use correct dot notation)
         if coordinates and len(coordinates) == 2:
-            update_doc["location.geojson"] = {
-                "type": "Point",
-                "coordinates": coordinates
-            }
+            update_doc["location.geojson.coordinates"] = coordinates
+            print(f"🗺️  Setting coordinates in update_doc: {coordinates}")
         
         # If any fields were updated, set the last_summary_update_at timestamp
         if update_doc:
