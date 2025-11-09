@@ -334,7 +334,7 @@ def add_incident_transcript(request: AddTranscriptRequest):
    Creates a new incident if it doesn't exist, or appends to existing incident.
    """
    try:
-       update_dynamic_fields(request.incident_id, request.transcript, request.caller)
+       add_transcript(request.incident_id, request.transcript, request.caller)
        return {
            "status": "success",
            "message": f"Transcript added to incident {request.incident_id}",
