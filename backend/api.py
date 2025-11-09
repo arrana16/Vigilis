@@ -41,7 +41,7 @@ manager = ConnectionManager()
 from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded, post_story
 from fill_agent.fill_agent import update_dynamic_fields
-from polizia_agent.polizia_tools import update_context
+from polizia_agent.polizia_tools import get_incident_context
 # from polizia_agent.polizia_agent import chat
 from db import add_transcript, retrieve_chat_elements, get_current_summary
 from police_cars import (
@@ -381,12 +381,12 @@ def get_chat_elements(incident_id: str):
 
 
 @app.post("/incident/context")
-def get_incident_context(request: IncidentRequest):
+def get_incident_context_endpoint(request: IncidentRequest):
    """
    Get the full incident document as JSON
    """
    try:
-       context = update_context(request.incident_id)
+       context = get_incident_context(request.incident_id)
        import json
        return {"incident_id": request.incident_id, "context": json.loads(context)}
    except ValueError as e:
