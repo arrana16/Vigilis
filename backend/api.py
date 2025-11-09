@@ -979,12 +979,12 @@ async def notify_clients_from_trigger(request: Request):
    payload = await request.json()
    incident_id = payload.get("incident_id")
    
-   if incident_id:
-       # Run the fill agent analysis
-       try:
-           update_dynamic_fields(incident_id=incident_id)
-       except Exception as e:
-           print(f"Error analyzing incident {incident_id}: {e}")
+#    if incident_id:
+#        # Run the fill agent analysis
+#        try:
+#            update_dynamic_fields(incident_id=incident_id)
+#        except Exception as e:
+#            print(f"Error analyzing incident {incident_id}: {e}")
 
    # Broadcast to all connected clients
    await manager.broadcast("data_updated")

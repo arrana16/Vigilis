@@ -14,6 +14,7 @@ except ImportError:
     from fill_agent.fill_tools import get_dynamic_fields_func, update_params_func
 
 from google import genai
+import time
 
 load_dotenv()
 
@@ -22,6 +23,10 @@ os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = '0'
 
 # Initialize Gemini client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# CRITICAL: Rate limiting to prevent infinite loops from MongoDB triggers
+_last_update_time = {}
+_UPDATE_COOLDOWN_SECONDS = 20  # Minimum 60 seconds between updates for same incident
 
 # System prompt for Gemini
 SYSTEM_PROMPT = """You are an emergency dispatch incident analyzer. Your job is to analyze incident transcripts and determine if the title, location, severity, or summary need to be updated based on new information.
@@ -130,9 +135,10 @@ def geocode_address(address: str) -> dict:
 def update_dynamic_fields(incident_id: str) -> str:
     """
     Analyze incident and update fields based on transcript analysis.
+    Includes rate limiting to prevent infinite loops from MongoDB triggers.
     
     Steps:
-    1. Take incident_id as parameter
+    1. Check rate limit (prevent updates within cooldown period)
     2. Get current incident data (transcripts, location, severity, summary)
     3. Ask Gemini to parse transcripts and return updates in specific format
     4. Parse the returned string
@@ -144,6 +150,20 @@ def update_dynamic_fields(incident_id: str) -> str:
     Returns:
         Status message as a string
     """
+    
+    # CRITICAL: Rate limiting to prevent infinite loops from MongoDB triggers
+    current_time = time.time()
+    last_update = _last_update_time.get(incident_id, 0)
+    time_since_last = current_time - last_update
+    
+    if time_since_last < _UPDATE_COOLDOWN_SECONDS:
+        remaining = int(_UPDATE_COOLDOWN_SECONDS - time_since_last)
+        print(f"⏳ RATE LIMITED: Skipping update for {incident_id} (cooldown: {remaining}s remaining)")
+        return f"⏳ Rate limited: Update skipped (cooldown: {remaining}s remaining)"
+    
+    # Update the last update timestamp
+    _last_update_time[incident_id] = current_time
+    print(f"✅ Rate limit check passed for {incident_id}")
     
     # Step 1 & 2: Get current incident data
     print(f"📊 Fetching data for incident {incident_id}...")
