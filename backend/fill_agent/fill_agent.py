@@ -167,7 +167,7 @@ def update_dynamic_fields(incident_id: str) -> str:
     print(f"  Summary: {current_summary[:100]}...")
     
     # Step 3: Ask Gemini to analyze transcripts
-    user_prompt = f"""Analyze this incident and determine if any fields need updating.
+    user_prompt = f"""Analyze this incident and determine if any fields need updating based on transcripts EMPTY FIELDS MEANS IMMEDIATE UPDATE REQUIRED.
 
 CURRENT VALUES:
 Title: {current_title}
@@ -177,7 +177,7 @@ Summary: {current_summary}
 
 TRANSCRIPTS:
 {transcripts}
-
+    
 Analyze the transcripts and return updates ONLY if there is important new information. Otherwise, keep the original values."""
 
     print(f"🤖 Analyzing with Gemini...")
