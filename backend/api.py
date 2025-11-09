@@ -196,6 +196,8 @@ def root():
        "endpoints": {
            "GET /health": "Health check",
            "GET /stats": "Service statistics",
+           "GET /incidents": "Get all active incidents",
+           "GET /incidents/all": "DEBUG: Get all incidents (any status)",
            "POST /chat": "Chat with Vigilis AI assistant",
            "POST /incident/update_transcript": "Add transcript to incident (creates new or appends to existing)",
            "GET /incident/chat_elements/{incident_id}": "Get chat elements for incident",
@@ -230,6 +232,64 @@ def root():
 def health_check():
    """Health check endpoint"""
    return {"status": "healthy"}
+
+
+@app.get("/incidents/all")
+def get_all_incidents_debug():
+   """
+   DEBUG: Get ALL incidents regardless of status
+   """
+   try:
+       from db import client
+       from bson import json_util
+       import json
+       
+       db = client["dispatch_db"]
+       collection = db["active_incidents"]
+       
+       incidents = list(collection.find({}).limit(10))
+       incidents_json = json.loads(json_util.dumps(incidents))
+       
+       return {"incidents": incidents_json, "count": len(incidents_json)}
+   except Exception as e:
+       raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/incidents")
+def get_all_incidents():
+   """
+   Get all active incidents from the database
+   """
+   try:
+       from db import client
+       from bson import json_util
+       import json
+       
+       print("📊 Fetching incidents from MongoDB...")
+       db = client["dispatch_db"]
+       collection = db["active_incidents"]
+       
+       # Fetch all active incidents, sorted by last update (most recent first)
+       print("🔍 Querying active_incidents collection...")
+       
+       # First check total count
+       total_count = collection.count_documents({})
+       active_count = collection.count_documents({"status": "active"})
+       print(f"📊 Total incidents: {total_count}, Active: {active_count}")
+       
+       incidents = list(collection.find(
+           {"status": "active"}
+       ).sort("last_summary_update_at", -1).limit(100))  # Limit to prevent huge queries
+       
+       print(f"✅ Found {len(incidents)} active incidents")
+       
+       # Convert MongoDB documents to JSON (handles ObjectId and other BSON types)
+       incidents_json = json.loads(json_util.dumps(incidents))
+       
+       return {"incidents": incidents_json, "count": len(incidents_json)}
+   except Exception as e:
+       print(f"❌ Error in /incidents endpoint: {e}")
+       raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/stats")
