@@ -34,8 +34,8 @@ SYSTEM_PROMPT = """You are an emergency dispatch incident analyzer. Your job is 
 RULES:
 - ONLY update fields if the transcripts contain important new information that differs from the current values
 - if transcripts don't mention new information, keep the original value
-- For TITLE: Update only if situation changes significantly (keep around 4-6 words)
-- For LOCATION: Extract the FULL descriptive location from transcripts. Return the original value if no new location is mentioned.
+- For TITLE: Update based on changes in the transcripts
+- For LOCATION: Extract an address string from the transcripts. KEEP STRICT ADDRESS FORMATTING. eg("123 Main St, Springfield, IL 62701" or "Central Park, New York, NY")
 - For SEVERITY: Only update if transcripts show the situation has worsened or improved:
   * low: minor incident, no injuries, resolved
   * medium: possible injuries, moderate incident
@@ -57,7 +57,7 @@ If a field should NOT be updated, return the ORIGINAL value for that field."""
 def geocode_address(address: str) -> dict:
     """
     Convert an address string to longitude/latitude coordinates using Nominatim (OpenStreetMap).
-    Includes smart fallback for specific buildings by extracting general location.
+    Preprocesses address by removing prepositions like "in", "at", "near" for better results.
     
     Args:
         address: The address string to geocode
@@ -67,6 +67,7 @@ def geocode_address(address: str) -> dict:
         Returns None values if geocoding fails
     """
     if not address or address.strip() == "":
+        print(f"⚠️  Empty address provided for geocoding.")
         return {"longitude": None, "latitude": None, "formatted_address": address}
     
     def try_geocode(query: str) -> dict:
@@ -76,8 +77,7 @@ def geocode_address(address: str) -> dict:
             params = {
                 "q": query,
                 "format": "json",
-                "limit": 1,
-                "addressdetails": 1
+                "limit": 1
             }
             headers = {
                 "User-Agent": "Vigilis-Emergency-Dispatch/1.0"
@@ -95,39 +95,54 @@ def geocode_address(address: str) -> dict:
                     "formatted_address": result.get("display_name", query)
                 }
             return None
-        except Exception:
+        except Exception as e:
+            print(f"   ⚠️  Geocoding exception: {e}")
             return None
     
-    # Try original address first
-    result = try_geocode(address)
+    # PREPROCESS: Extract location after prepositions "in", "at", "near", "on"
+    # e.g., "Mercedes-Benz Stadium in Atlanta, Georgia" → "Atlanta, Georgia"
+    # e.g., "Building at Georgia Tech" → "Georgia Tech"
+    processed_address = address
+    prepositions = [" in ", " at ", " near ", " on "]
+    
+    for prep in prepositions:
+        if prep in address.lower():
+            # Extract everything after the preposition
+            parts = address.split(prep, 1)
+            if len(parts) == 2:
+                extracted = parts[1].strip()
+                print(f"   📍 Extracted location after '{prep.strip()}': {extracted}")
+                
+                # Try geocoding the extracted part first
+                result = try_geocode(extracted)
+                if result:
+                    result["formatted_address"] = address  # Keep original
+                    return result
+                
+                # If that fails, also try the full original address
+                processed_address = extracted
+                break
+    
+    # Try original/processed address
+    print(f"   🌍 Geocoding: {processed_address}")
+    result = try_geocode(processed_address)
     if result:
+        result["formatted_address"] = address  # Keep original description
         return result
     
-    # Smart fallback: Extract general location from phrases like "Building at Location"
-    # e.g., "Crossland Tower at Georgia Tech" -> try "Georgia Tech"
-    if " at " in address.lower():
-        general_location = address.lower().split(" at ", 1)[1].strip()
-        print(f"   Trying fallback to general area: {general_location}")
-        result = try_geocode(general_location)
-        if result:
-            # Keep original address text but use general location coordinates
-            result["formatted_address"] = address
-            return result
+    # Fallback: Try comma-separated parts (city, state)
+    if "," in processed_address:
+        parts = [p.strip() for p in processed_address.split(",")]
+        if len(parts) >= 2:
+            general_location = ", ".join(parts[-2:])  # Last 2 parts
+            print(f"   🔄 Trying city/state fallback: {general_location}")
+            result = try_geocode(general_location)
+            if result:
+                result["formatted_address"] = address
+                return result
     
-    # Try removing building/suite numbers
-    import re
-    if any(keyword in address.lower() for keyword in ["building", "tower", "suite", "room", "floor"]):
-        # Extract city/area after commas or "in"
-        if "," in address:
-            parts = [p.strip() for p in address.split(",")]
-            if len(parts) >= 2:
-                general_location = ", ".join(parts[-2:])  # Last 2 parts (city, state)
-                print(f"   Trying fallback to: {general_location}")
-                result = try_geocode(general_location)
-                if result:
-                    result["formatted_address"] = address
-                    return result
-    
+    print(f"⚠️  No geocoding results found for: {address}")
+    return {"longitude": None, "latitude": None, "formatted_address": address}
     print(f"⚠️  No geocoding results found for: {address}")
     return {"longitude": None, "latitude": None, "formatted_address": address}
 
@@ -248,6 +263,8 @@ Analyze the transcripts and return updates ONLY if there is important new inform
     elif new_location and (not current_coordinates or len(current_coordinates) == 0):
         needs_geocoding = True
         print(f"🗺️  Coordinates missing, geocoding existing location: {new_location}")
+    else:
+        print(f"ℹ️  Location unchanged and coordinates exist: {current_coordinates}")
     
     if needs_geocoding:
         geo_result = geocode_address(new_location)
@@ -255,9 +272,7 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         if geo_result["longitude"] is not None and geo_result["latitude"] is not None:
             coordinates = [geo_result["longitude"], geo_result["latitude"]]
             print(f"✅ Geocoded: [{geo_result['longitude']}, {geo_result['latitude']}]")
-            # Only update the formatted address if location actually changed
-            if new_location != current_location:
-                new_location = geo_result["formatted_address"]
+            # Keep original address text (don't overwrite with formatted version)
         else:
             print(f"⚠️  Could not geocode location, using text only")
     
@@ -311,8 +326,10 @@ DATABASE RESULT:
 
 if __name__ == "__main__":
     # Test the workflow
-    test_incident_id = "af9a64a1-c6d0-4aca-818b-09a2ad4fa4f2"
+    test_incident_id = "17bc8fd7-085f-4063-89ed-826aaded3fd2"
     result = update_dynamic_fields(test_incident_id)
     print("\n" + "="*80)
     print(result)
     print("="*80)
+
+
