@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { IncidentFrontend } from "./lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { FrontendIncident } from "./lib/types";
 import { getAllIncidents } from "./lib/api";
 import DetailPage from "./components/DetailPage";
 import mapboxgl from "mapbox-gl";
@@ -13,8 +14,6 @@ const incidentLocations: Record<string, [number, number]> = {};
 export default function Home() {
 	// Map instance (declare first so effects can reference it)
 	const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
-	const [incidents, setIncidents] = useState<IncidentFrontend[]>([]);
-	const [incidentsError, setIncidentsError] = useState<string | null>(null);
 	const [activeIncidentId, setActiveIncidentId] = useState<string>("");
 	const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(
 		null
@@ -110,41 +109,62 @@ export default function Home() {
 		setHoveredIncidentId(null);
 	}, []);
 
+	const handleLogoClick = useCallback(() => {
+		// Reset to home view - zoomed out center of Atlanta
+		if (mapInstance) {
+			const easeInOut = (t: number) =>
+				t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+			mapInstance.flyTo({
+				center: [-84.388, 33.76], // Center of Atlanta
+				zoom: 12.5, // Slightly zoomed out
+				pitch: 45, // Moderate pitch
+				bearing: 0,
+				duration: 1500,
+				easing: easeInOut,
+				essential: true,
+			});
+		}
+		// Clear active/expanded states
+		setActiveIncidentId("");
+		setExpandedIncidentId(null);
+	}, [mapInstance]);
+
+	// Use React Query to fetch incidents - automatically refetches when invalidated
+	const {
+		data: incidents = [],
+		error: incidentsError,
+		isLoading: incidentsLoading,
+	} = useQuery({
+		queryKey: ["incidents"],
+		queryFn: getAllIncidents,
+		staleTime: 30_000, // Consider data fresh for 30 seconds
+		refetchInterval: 60_000, // Optionally poll every 60 seconds as backup
+	});
+
+	// Populate location cache whenever incidents change
+	useEffect(() => {
+		incidents.forEach((inc) => {
+			const coords = inc.location?.geojson?.coordinates;
+			if (Array.isArray(coords) && coords.length >= 2) {
+				incidentLocations[inc.id] = [coords[0], coords[1]];
+			}
+		});
+
+		// Set initial active incident when incidents first load (avoid cascading renders)
+		if (!activeIncidentId && incidents.length > 0) {
+			// Use requestAnimationFrame to defer state update
+			requestAnimationFrame(() => {
+				setActiveIncidentId(incidents[0].id);
+			});
+		}
+	}, [incidents, activeIncidentId]);
+
 	const activeIncident = incidents.find(
-		(inc: IncidentFrontend) => inc.id === activeIncidentId
+		(inc: FrontendIncident) => inc.id === activeIncidentId
 	);
 
-	// Initial load of incidents
-	useEffect(() => {
-		let mounted = true;
-		getAllIncidents()
-			.then((data) => {
-				if (!mounted) return;
-				setIncidents(data);
-				setIncidentsError(null);
-				if (!activeIncidentId && data.length) {
-					setActiveIncidentId(data[0].id);
-				}
-				// Populate location cache
-				data.forEach((inc) => {
-					const coords = inc.location?.geojson?.coordinates;
-					if (Array.isArray(coords) && coords.length >= 2) {
-						incidentLocations[inc.id] = [coords[0], coords[1]];
-					}
-				});
-			})
-			.catch((err) => {
-				if (!mounted) return;
-				console.error("Failed to load incidents", err);
-				setIncidentsError(err.message || "Failed to load incidents");
-			});
-		return () => {
-			mounted = false;
-		};
-	}, [activeIncidentId]);
-
 	// Fade-in detail page once loaded
-	if (showDetail) {
+	if (showDetail && activeIncident) {
 		// Ensure transition flag is cleared once detail is mounted
 		if (transitioningToDetail) setTransitioningToDetail(false);
 		return (
@@ -263,13 +283,16 @@ export default function Home() {
 				{incidentsError && incidents.length === 0 && (
 					<div className="absolute top-4 left-4 z-20 bg-red-600/80 text-white text-xs px-3 py-2 rounded shadow">
 						<span className="font-semibold">Error:</span>{" "}
-						{incidentsError}
-						<button
-							onClick={() => setActiveIncidentId("")}
-							className="ml-3 underline"
-						>
-							Retry
-						</button>
+						{incidentsError instanceof Error
+							? incidentsError.message
+							: "Failed to load incidents"}
+					</div>
+				)}
+				{incidentsLoading && incidents.length === 0 && (
+					<div className="absolute top-4 left-4 z-20 bg-blue-600/80 text-white text-xs px-3 py-2 rounded shadow">
+						<span className="font-semibold">
+							Loading incidents...
+						</span>
 					</div>
 				)}
 				{incidents.length > 0 && (
@@ -287,7 +310,19 @@ export default function Home() {
 			{/* Top Gradient Header with Branding */}
 			<div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black via-black/60 to-transparent z-10 pointer-events-none">
 				<div className="p-8">
-					<div className="flex items-center gap-2">
+					<div
+						className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity pointer-events-auto w-fit"
+						onClick={handleLogoClick}
+						role="button"
+						tabIndex={0}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								handleLogoClick();
+							}
+						}}
+						aria-label="Return to home view"
+					>
 						{/* Eye icon */}
 						<svg
 							className="shrink-0"
@@ -321,7 +356,7 @@ export default function Home() {
 			{/* Floating Incident Cards (Frosted) */}
 			<div className="absolute left-6 top-32 bottom-6 w-80 z-10 flex flex-col gap-3">
 				<div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent space-y-3">
-					{incidents.map((incident: IncidentFrontend) => {
+					{incidents.map((incident: FrontendIncident) => {
 						const isActive = activeIncidentId === incident.id;
 						const isHovered = hoveredIncidentId === incident.id;
 						const isExpanded = expandedIncidentId === incident.id;
@@ -530,7 +565,7 @@ export default function Home() {
 
 // Separate component for the map view
 interface IncidentMapViewProps {
-	incidents: IncidentFrontend[];
+	incidents: FrontendIncident[];
 	incidentLocations: Record<string, [number, number]>;
 	activeIncidentId: string;
 	hoveredIncidentId: string | null;

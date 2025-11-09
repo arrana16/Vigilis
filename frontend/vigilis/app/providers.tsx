@@ -28,8 +28,17 @@ export function Providers({ children }: { children: ReactNode }) {
 		socket.onopen = () => console.log("✅ Core WS connected");
 		socket.onmessage = (evt) => {
 			if (evt.data === "data_updated") {
-				console.log("🔄 Invalidate incident queries");
-				queryClient.invalidateQueries();
+				console.log(
+					"🔄 Invalidating incident queries due to data update"
+				);
+				// Invalidate all queries to refetch fresh data
+				queryClient.invalidateQueries({ queryKey: ["incidents"] });
+				queryClient.invalidateQueries({
+					queryKey: ["incident-summary"],
+				});
+				queryClient.invalidateQueries({
+					queryKey: ["incident-suggestions"],
+				});
 			}
 		};
 		socket.onerror = (err) => console.error("❌ Core WS error", err);
