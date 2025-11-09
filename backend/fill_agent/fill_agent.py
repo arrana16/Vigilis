@@ -35,7 +35,7 @@ RULES:
 - ONLY update fields if the transcripts contain important new information that differs from the current values
 - if transcripts don't mention new information, keep the original value
 - For TITLE: Update based on changes in the transcripts
-- For LOCATION: Extract an address string from the transcripts. KEEP STRICT ADDRESS FORMATTING. eg("123 Main St, Springfield, IL 62701" or "Central Park, New York, NY")
+- For LOCATION: Extract an address string from the transcripts that can be geocoded. CRITICAL: Use the most specific landmark or address mentioned, as this is what we know for certain exists and can be geocoded.
 - For SEVERITY: Only update if transcripts show the situation has worsened or improved:
   * low: minor incident, no injuries, resolved
   * medium: possible injuries, moderate incident
@@ -43,15 +43,70 @@ RULES:
   * critical: life threatening, not breathing, active shooter, major fire, multiple casualties
 - For SUMMARY: Update to reflect the latest information from transcripts (2-3 sentences)
 
+LOCATION EXTRACTION RULES - CRITICAL FOR GEOCODING:
+When extracting locations, identify the most specific, geocodable reference point. Use landmarks, institutions, or addresses that mapping services can find. Include the city/state for context.
+
+REASONING: If someone says "near Mercedes-Benz Stadium", the only location we know FOR CERTAIN is "Mercedes-Benz Stadium" - that's what should be geocoded. The geocoding system will then provide exact coordinates for that landmark. Vague directional terms like "near", "by", "close to" should be removed.
+
+EXAMPLES OF CORRECT LOCATION EXTRACTION:
+
+1. Transcript: "There's a fire near the Mercedes-Benz Stadium in downtown Atlanta"
+   → Location: "Mercedes-Benz Stadium, Atlanta, GA"
+   Reasoning: "Mercedes-Benz Stadium" is the certain landmark. Remove "near" and "downtown" which are vague.
+
+2. Transcript: "Robbery at a store close to Georgia Tech campus"
+   → Location: "Georgia Tech, Atlanta, GA"
+   Reasoning: "Georgia Tech" is the known reference point that can be geocoded. The specific store is unknown.
+
+3. Transcript: "Car accident on I-85 near Hartsfield-Jackson Airport"
+   → Location: "Hartsfield-Jackson Atlanta International Airport, Atlanta, GA"
+   Reasoning: The airport is a specific geocodable landmark. Highway locations are imprecise without mile markers.
+
+4. Transcript: "Medical emergency at 425 10th Street Northwest in Midtown"
+   → Location: "425 10th Street NW, Atlanta, GA"
+   Reasoning: Specific street address is the most precise location available.
+
+5. Transcript: "Assault reported somewhere around Centennial Olympic Park"
+   → Location: "Centennial Olympic Park, Atlanta, GA"
+   Reasoning: The park is the certain landmark, even though exact location within park is unknown.
+
+6. Transcript: "Fire in building by Bobby Dodd Stadium on North Avenue"
+   → Location: "Bobby Dodd Stadium, Atlanta, GA"
+   Reasoning: Stadium is the geocodable landmark. "Building by" is too vague.
+
+7. Transcript: "Suspicious activity near the corner of Peachtree and 14th Street"
+   → Location: "Peachtree Street and 14th Street, Atlanta, GA"
+   Reasoning: Street intersection can be geocoded as "Street1 and Street2, City, State".
+
+8. Transcript: "Person down at Piedmont Park entrance on 10th Street side"
+   → Location: "Piedmont Park, Atlanta, GA"
+   Reasoning: Park name is geocodable. Specific entrance details are too granular.
+
+9. Transcript: "Disturbance at the Varsity restaurant in downtown"
+   → Location: "The Varsity, Atlanta, GA"
+   Reasoning: Well-known restaurant name is geocodable as a landmark.
+
+10. Transcript: "Traffic incident eastbound on North Avenue near the interstate"
+    → Location: "North Avenue, Atlanta, GA"
+    Reasoning: Street name with city provides geocodable reference. "Near interstate" is too vague.
+
+KEY PRINCIPLES:
+- Extract the most specific landmark, building, institution, or street address mentioned
+- Always include city and state (assume Atlanta, GA if not specified in Georgia context)
+- Remove vague terms: "near", "close to", "around", "by", "somewhere"
+- Prefer named landmarks over directional descriptions
+- If multiple landmarks mentioned, use the most specific one
+- Street intersections: format as "Street1 and Street2, City, State"
+
 Return a JSON object with these exact fields:
 {
   "title": "string (4-6 words)",
-  "location": "string (full descriptive address or place name)",
+  "location": "string (geocodable landmark or address with city, state)",
   "severity": "low|medium|high|critical",
   "summary": "string (2-3 sentences)"
 }
 
-If a field should NOT be updated, return the ORIGINAL value for that field."""
+If a field should NOT be updated, return the ORIGINAL value for that field.""" 
 
 
 def geocode_address(address: str) -> dict:
