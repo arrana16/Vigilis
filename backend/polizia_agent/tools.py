@@ -31,7 +31,7 @@ def update_context(id: str) -> str:
         ValueError: If incident is not found or database query fails
     """
     try:
-        incident = collection.find_one({"_id": ObjectId(id)})
+        incident = collection.find_one({"incident_id": id})
     except Exception as e:
         raise ValueError(f"Error querying incident with ID {id}: {e}")
     

@@ -27,7 +27,7 @@ llm = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def generate_report(id: str):
     try:
-        incident = collection.find_one({"_id": ObjectId(id)})
+        incident = collection.find_one({"incident_id": id})
     except Exception as e:
         raise ValueError(f"Error querying incident with ID {id}: {e}")
     
@@ -79,7 +79,7 @@ def set_concluded(id: str) -> str:
     """
     try:
         result = collection.update_one(
-            {"_id": ObjectId(id)},
+            {"incident_id": id},
             {"$set": {"status": "concluded"}}
         )
         if result.matched_count == 0:
@@ -98,7 +98,7 @@ def create_bson(id: str):
     Then save it to the knowledge_base collection.
     """
     # Get the original incident from active_incidents
-    incident = collection.find_one({"_id": ObjectId(id)})
+    incident = collection.find_one({"incident_id": id})
     if not incident:
         raise ValueError(f"No incident found with ID: {id}")
     

@@ -36,7 +36,7 @@ def get_dynamic_fields(id: str):
         ValueError: If the incident is not found.
     """
     try:
-        incident = collection.find_one({"_id": ObjectId(id)})
+        incident = collection.find_one({"incident_id": id})
     except Exception as e:
         raise ValueError(f"Error querying incident with ID {id}: {e}")
     
@@ -90,7 +90,7 @@ def update_params(id: str, new_location: str, new_severity: str, new_summary: st
         
         # Update the incident in MongoDB
         result = collection.update_one(
-            {"_id": ObjectId(id)},
+            {"incident_id": id},
             {"$set": update_doc}
         )
         

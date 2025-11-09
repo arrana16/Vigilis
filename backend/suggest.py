@@ -25,7 +25,7 @@ llm = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def summarize_current_status(id: str) -> str: 
     try:
-        incident = collection.find_one({"_id": ObjectId(id)})
+        incident = collection.find_one({"incident_id": id})
     except Exception as e:
         raise ValueError(f"Error querying incident with ID {id}: {e}")
     
@@ -167,7 +167,7 @@ Analyze the historical outcomes and provide data-driven suggestions:"""
     return response.text
 
 if __name__ == "__main__":
-    id = "690eb0a52e8f17ecb7b23e81"
+    id = "F251107-0124"
     # id = "690eb0a52e8f17ecb7b23e81"
     suggestions = givesuggestions(id)
     print("Suggestions:")

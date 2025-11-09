@@ -34,7 +34,7 @@ def exists(id: str) -> bool:
         ValueError: If there's an error querying the database
     """
     try:
-        incident = collection.find_one({"_id": ObjectId(id)})
+        incident = collection.find_one({"incident_id": id})
         return incident is not None
     except Exception as e:
         raise ValueError(f"Error checking if incident {id} exists: {str(e)}")
@@ -54,7 +54,7 @@ def append_to_transcript(id: str, transcript: str, caller: str):
     try:
         addition = f"{caller}: {transcript}"
         result = collection.update_one(
-            {"_id": ObjectId(id)},
+            {"incident_id": id},
             {"$set": {f"transcripts.{caller}": addition}}
         )
         
@@ -86,7 +86,6 @@ def new_entry(id: str, transcript: str, caller: str):
             raise ValueError(f"Incident with ID {id} already exists")
         
         entry = {
-            "_id": ObjectId(id),
             "incident_id": id,
             "title": "",
             "severity": "",
