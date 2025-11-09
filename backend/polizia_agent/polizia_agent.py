@@ -44,3 +44,43 @@ polizia_agent = Agent(
 )
 
 
+def chat(message: str, incident_id: str = None) -> str:
+    """
+    Send a message to the agent and get a response.
+    
+    Args:
+        message: The user's message/question
+        incident_id: Optional incident ID for context
+    
+    Returns:
+        The agent's response as a string
+    """
+    message_time = datetime.now(UTC).isoformat()
+    
+    # Build prompt with incident context if provided
+    if incident_id:
+        prompt = f"[Current Incident: {incident_id}]\n{message}"
+    else:
+        prompt = message
+    
+    # Send message to the agent
+    response = polizia_agent.send_message(prompt)
+    
+    # Update chat elements in database
+    current_time = datetime.now(UTC).isoformat()
+    elements = [
+        {"Author": "Caller", "Content": message, "Time": message_time},
+        {"Author": "Polizia", "Content": response.text, "Time": current_time}
+    ]
+    
+    if incident_id:
+        update_chat_elements(incident_id, elements)
+                
+    return response.text
+
+
+if __name__ == "__main__":
+    test_message = "What is the current status of incident F251107-0124?"
+    response = chat(test_message, incident_id="F251107-0124")
+    print("Agent Response:")
+    print(response)

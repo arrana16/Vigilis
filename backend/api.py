@@ -41,7 +41,7 @@ from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded, post_story
 from fill_agent.fill_agent import update_dynamic_fields
 from polizia_agent.polizia_tools import update_context
-from polizia_agent.polizia_agent import chat
+# from polizia_agent.polizia_agent import chat
 from db import add_transcript, retrieve_chat_elements, get_current_summary
 from police_cars import (
    PoliceCar,
@@ -198,7 +198,7 @@ def root():
            "GET /stats": "Service statistics",
            "GET /incidents": "Get all active incidents",
            "GET /incidents/all": "DEBUG: Get all incidents (any status)",
-           "POST /chat": "Chat with Vigilis AI assistant",
+        #    "POST /chat": "Chat with Vigilis AI assistant",
            "POST /incident/update_transcript": "Add transcript to incident (creates new or appends to existing)",
            "GET /incident/chat_elements/{incident_id}": "Get chat elements for incident",
            "POST /incident/context": "Get incident context (BSON)",
@@ -304,22 +304,22 @@ def get_stats():
    }
 
 
-@app.post("/chat")
-def chat_with_agent(request: ChatRequest):
-   """
-   Chat with the Vigilis AI assistant. Optionally provide an incident_id for context.
-   """
-   try:
-       response = chat(request.message, request.incident_id)
-       return {
-           "message": request.message,
-           "incident_id": request.incident_id,
-           "response": response
-       }
-   except ValueError as e:
-       raise HTTPException(status_code=404, detail=str(e))
-   except Exception as e:
-       raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/chat")
+# def chat_with_agent(request: ChatRequest):
+#    """
+#    Chat with the Vigilis AI assistant. Optionally provide an incident_id for context.
+#    """
+#    try:
+#        response = chat(request.message, request.incident_id)
+#        return {
+#            "message": request.message,
+#            "incident_id": request.incident_id,
+#            "response": response
+#        }
+#    except ValueError as e:
+#        raise HTTPException(status_code=404, detail=str(e))
+#    except Exception as e:
+#        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
