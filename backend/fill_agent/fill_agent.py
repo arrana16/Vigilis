@@ -306,37 +306,10 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         new_severity = current_severity
         new_summary = current_summary
     
-    # Step 5: Geocode the location if it changed OR if coordinates are missing
-    coordinates = None
-    needs_geocoding = False
-    
-    # Check if location changed
-    if new_location and new_location != current_location:
-        needs_geocoding = True
-        print(f"🗺️  Location changed, geocoding: {new_location}")
-    # Check if coordinates are missing but we have a location
-    elif new_location and (not current_coordinates or len(current_coordinates) == 0):
-        needs_geocoding = True
-        print(f"🗺️  Coordinates missing, geocoding existing location: {new_location}")
-    else:
-        print(f"ℹ️  Location unchanged and coordinates exist: {current_coordinates}")
-    
-    if needs_geocoding:
-        geo_result = geocode_address(new_location)
-        
-        if geo_result["longitude"] is not None and geo_result["latitude"] is not None:
-            coordinates = [geo_result["longitude"], geo_result["latitude"]]
-            print(f"✅ Geocoded: [{geo_result['longitude']}, {geo_result['latitude']}]")
-            # Keep original address text (don't overwrite with formatted version)
-        else:
-            print(f"⚠️  Could not geocode location, using text only")
-    
-    # Step 6: Update the BSON document
+    # Step 5: Update the BSON document
     print(f"📝 Updating database with new values...")
     print(f"  New Title: {new_title}")
     print(f"  New Location: {new_location}")
-    if coordinates:
-        print(f"  New Coordinates: {coordinates}")
     print(f"  New Severity: {new_severity}")
     print(f"  New Summary: {new_summary[:100]}...")
     
@@ -346,7 +319,7 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         new_location=new_location,
         new_severity=new_severity,
         new_summary=new_summary,
-        coordinates=coordinates
+        coordinates=None
     )
     
     # Determine what changed
@@ -376,15 +349,34 @@ NO CHANGES - All fields remain the same (no important updates detected in transc
 DATABASE RESULT:
 {update_result}"""
     
+    data = geocode_address(new_location if new_location else current_location)
+    long = data["longitude"]
+    lat = data["latitude"]
+
+    update_params_func(
+        id=incident_id,
+        new_title=new_title,
+        new_location=new_location,
+        new_severity=new_severity,
+        new_summary=new_summary,
+        coordinates=(long, lat)
+    )
+
     return result
 
 
 if __name__ == "__main__":
-    # Test the workflow
-    test_incident_id = "17bc8fd7-085f-4063-89ed-826aaded3fd2"
+    test_incident_id = "e96e635e-465f-4683-b636-82360eeac8cb"
     result = update_dynamic_fields(test_incident_id)
     print("\n" + "="*80)
     print(result)
     print("="*80)
+
+    # data = geocode_address("Emory University Hospital, Atlanta, Georgia")
+    # data["longitude"]
+    # data["latitude"]
+
+
+    
 
 

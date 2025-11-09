@@ -336,6 +336,7 @@ async def add_incident_transcript(request: AddTranscriptRequest):
    """
    try:
        add_transcript(request.incident_id, request.transcript, request.caller)
+       update_dynamic_fields(request.incident_id)
        
        # Trigger fill agent analysis (with rate limiting built-in)
        try:
