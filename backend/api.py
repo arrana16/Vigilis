@@ -337,13 +337,12 @@ async def add_incident_transcript(request: AddTranscriptRequest):
    """
    try:
        add_transcript(request.incident_id, request.transcript, request.caller, request.convo)
-       update_dynamic_fields(request.incident_id)
        
        # Trigger fill agent analysis (with rate limiting built-in)
        try:
            update_dynamic_fields(incident_id=request.incident_id)
        except Exception as e:
-           print(f"Error analyzing incident {request.incident_id}: {e}")
+           print(f"⚠️  Error analyzing incident {request.incident_id}: {e}")
        
        # Broadcast to all connected WebSocket clients
        await manager.broadcast("data_updated")

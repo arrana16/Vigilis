@@ -307,32 +307,48 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         new_severity = current_severity
         new_summary = current_summary
     
-    # Step 5: Update the BSON document
-    print(f"📝 Updating database with new values...")
+    # Step 5: Geocode the location BEFORE updating database
+    print(f"📝 Preparing to update database with new values...")
     print(f"  New Title: {new_title}")
     print(f"  New Location: {new_location}")
     print(f"  New Severity: {new_severity}")
     print(f"  New Summary: {new_summary[:100]}...")
     
+    # Geocode the location to get coordinates
+    location_to_geocode = new_location if new_location else current_location
+    print(f"🌍 Geocoding location: {location_to_geocode}")
+    geocode_data = geocode_address(location_to_geocode)
+    longitude = geocode_data["longitude"]
+    latitude = geocode_data["latitude"]
+    
+    if longitude and latitude:
+        print(f"✅ Geocoding successful: ({latitude}, {longitude})")
+    else:
+        print(f"⚠️  Geocoding failed - coordinates will be None")
+    
+    # Single database update with all fields including coordinates
     update_result = update_params_func(
         id=incident_id,
         new_title=new_title,
         new_location=new_location,
         new_severity=new_severity,
         new_summary=new_summary,
-        coordinates=None
+        coordinates=(longitude, latitude) if longitude and latitude else None
     )
     
     # Determine what changed
     changes = []
     if new_title != current_title:
-        changes.append(f"Title: '{current_title}' → '{new_title}'")
+        changes.append(f"title: '{current_title}' → '{new_title}'")
     if new_location != current_location:
-        changes.append(f"Location: '{current_location}' → '{new_location}'")
+        changes.append(f"location: '{current_location}' → '{new_location}'")
     if new_severity != current_severity:
-        changes.append(f"Severity: '{current_severity}' → '{new_severity}'")
+        changes.append(f"severity: '{current_severity}' → '{new_severity}'")
     if new_summary != current_summary:
-        changes.append(f"Summary updated")
+        changes.append(f"summary updated")
+    if longitude and latitude:
+        if current_coordinates != [longitude, latitude]:
+            changes.append(f"coordinates: {current_coordinates} → [{longitude}, {latitude}]")
     
     if changes:
         result = f"""✅ Fields Updated for {incident_id}
@@ -349,33 +365,18 @@ NO CHANGES - All fields remain the same (no important updates detected in transc
 
 DATABASE RESULT:
 {update_result}"""
-    
-    data = geocode_address(new_location if new_location else current_location)
-    long = data["longitude"]
-    lat = data["latitude"]
-
-    update_params_func(
-        id=incident_id,
-        new_title=new_title,
-        new_location=new_location,
-        new_severity=new_severity,
-        new_summary=new_summary,
-        coordinates=(long, lat)
-    )
 
     return result
 
 
 if __name__ == "__main__":
-    test_incident_id = "e96e635e-465f-4683-b636-82360eeac8cb"
+    test_incident_id = "76ef9fe2-0252-4637-9654-912b73e552c1"
     result = update_dynamic_fields(test_incident_id)
     print("\n" + "="*80)
     print(result)
     print("="*80)
 
-    # data = geocode_address("Emory University Hospital, Atlanta, Georgia")
-    # data["longitude"]
-    # data["latitude"]
+
 
 
     
