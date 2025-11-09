@@ -28,9 +28,9 @@ SYSTEM_PROMPT = """You are an emergency dispatch incident analyzer. Your job is 
 
 RULES:
 - ONLY update fields if the transcripts contain important new information that differs from the current values
-- Be CONSERVATIVE - if transcripts don't mention something new, keep the original value
+- if transcripts don't mention new information, keep the original value
 - For TITLE: Update only if situation changes significantly (keep around 4-6 words)
-- For LOCATION: Extract the FULL descriptive location from transcripts (e.g., "Crossland Tower at Georgia Tech", "1234 Peachtree St NE Atlanta"). Return the original value if no new location is mentioned.
+- For LOCATION: Extract the FULL descriptive location from transcripts. Return the original value if no new location is mentioned.
 - For SEVERITY: Only update if transcripts show the situation has worsened or improved:
   * low: minor incident, no injuries, resolved
   * medium: possible injuries, moderate incident
