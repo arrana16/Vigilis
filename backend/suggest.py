@@ -165,7 +165,7 @@ Example format:
 Generate suggestions now (reference ideas/patterns only, NO incident IDs):"""
 
     response = llm.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
     )
     return response.text
