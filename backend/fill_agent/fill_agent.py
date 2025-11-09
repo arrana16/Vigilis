@@ -305,12 +305,21 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         geocode_data = geocode_address(location_to_geocode)
         longitude = geocode_data["longitude"]
         latitude = geocode_data["latitude"]
+        
+        print(f"🔍 DEBUG Geocoding result:")
+        print(f"   - Raw geocode_data: {geocode_data}")
+        print(f"   - longitude: {longitude} (type: {type(longitude)})")
+        print(f"   - latitude: {latitude} (type: {type(latitude)})")
+        print(f"   - Both valid? {longitude and latitude}")
+        
         coords = [longitude, latitude] if longitude and latitude else None
         
         if longitude and latitude:
             print(f"✅ Geocoding successful: [{longitude}, {latitude}]")
+            print(f"   - coords variable set to: {coords}")
         else:
             print(f"⚠️  Geocoding failed for '{location_to_geocode}' - coordinates will be None")
+            print(f"   - coords variable set to: {coords}")
     
     # Single database update with all fields including coordinates
     update_result = update_params_func(
@@ -354,14 +363,16 @@ DATABASE RESULT:
 
 
 if __name__ == "__main__":
-    test_incident_id = "98fbd538-7199-41ba-acc3-9253e5ac1558"
+    # Test with the actual incident ID
+    test_incident_id = "1edb6828-667e-47fb-abe4-b0d9b3885459"
     result = update_dynamic_fields(test_incident_id)
     print("\n" + "="*80)
     print(result)
     print("="*80)
+    print("="*80)
 
-    # print(geocode_address("Georgia Aquarium, Atlanta, GA"))
-
+    # print(geocode_address("Mercedes Benz Stadium, Atlanta, Georgia"))
+    # print(geocode_address("Emory University, Atlanta, GA"))
 
 
 

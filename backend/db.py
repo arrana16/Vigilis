@@ -56,7 +56,9 @@ def add_transcript(id: str, transcript: str, caller: str, convo: str):
     else:
         try:
             formatted_transcript = f"{caller}: {transcript}"
-            result = collection.update_one(
+            # Use write concern "majority" to ensure write is committed before returning
+            from pymongo import WriteConcern
+            result = collection.with_options(write_concern=WriteConcern("majority")).update_one(
                 {"incident_id": id},
                 {"$push": {f"transcripts.{convo}": formatted_transcript}}
             )

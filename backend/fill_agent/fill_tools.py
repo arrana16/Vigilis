@@ -28,7 +28,9 @@ def get_dynamic_fields_func(id: str):
         Dictionary with transcripts (concatenated string), location, severity, summary, and coordinates.
     """
     try:
-        incident = collection.find_one({"incident_id": id})
+        # Use read concern "majority" to ensure we read the latest committed data
+        from pymongo import ReadConcern
+        incident = collection.with_options(read_concern=ReadConcern("majority")).find_one({"incident_id": id})
     except Exception as e:
         return {"error": f"Error querying incident with ID {id}: {e}"}
     
@@ -104,8 +106,9 @@ def update_params_func(id: str, new_location: str, new_severity: str, new_summar
         if update_doc:
             update_doc["last_summary_update_at"] = datetime.now(UTC).isoformat() + "Z"
         
-        # Update the incident in MongoDB
-        result = collection.update_one(
+        # Update the incident in MongoDB with write concern for durability
+        from pymongo import WriteConcern
+        result = collection.with_options(write_concern=WriteConcern("majority")).update_one(
             {"incident_id": id},
             {"$set": update_doc}
         )
