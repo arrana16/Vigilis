@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import React from 'react';
+import React from "react";
 
 export interface Incident {
 	id: string;
-	severity: 'high' | 'medium' | 'low';
+	severity: "high" | "medium" | "low";
 	title: string;
 	lastUpdated: string;
 }
 
 export const incidents: Incident[] = [
 	{
-		id: '1',
-		severity: 'high',
-		title: 'Police Chase',
-		lastUpdated: '8:46 PM',
+		id: "1",
+		severity: "high",
+		title: "Police Chase",
+		lastUpdated: "8:46 PM",
 	},
 	{
-		id: '2',
-		severity: 'medium',
-		title: 'Cardiac Arrest',
-		lastUpdated: '8:46 PM',
+		id: "2",
+		severity: "medium",
+		title: "Cardiac Arrest",
+		lastUpdated: "8:46 PM",
 	},
 ];
 
@@ -31,27 +31,27 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeIncidentId }) => {
 	const getSeverityColor = (severity: string) => {
 		switch (severity) {
-			case 'high':
-				return 'bg-d-rl';
-			case 'medium':
-				return 'bg-d-s';
-			case 'low':
-				return 'bg-d-p';
+			case "high":
+				return "bg-d-rl";
+			case "medium":
+				return "bg-d-s";
+			case "low":
+				return "bg-d-p";
 			default:
-				return 'bg-d-os2';
+				return "bg-d-os2";
 		}
 	};
 
 	const getSeverityLabel = (severity: string) => {
 		switch (severity) {
-			case 'high':
-				return 'HIGH SEVERITY';
-			case 'medium':
-				return 'MEDIUM SEVERITY';
-			case 'low':
-				return 'LOW SEVERITY';
+			case "high":
+				return "HIGH SEVERITY";
+			case "medium":
+				return "MEDIUM SEVERITY";
+			case "low":
+				return "LOW SEVERITY";
 			default:
-				return 'UNKNOWN';
+				return "UNKNOWN";
 		}
 	};
 
@@ -98,8 +98,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeIncidentId }) => {
 									key={incident.id}
 									className={`flex flex-col gap-8 overflow-clip p-4 rounded-2xl transition-all duration-300 ${
 										isActive
-											? 'bg-d-os text-d-bg'
-											: 'bg-[#1a1a1a]'
+											? "bg-d-os text-d-bg"
+											: "bg-[#1a1a1a]"
 									}`}
 								>
 									<div className="flex flex-col gap-2">
@@ -112,16 +112,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activeIncidentId }) => {
 											<p
 												className={`text-xs font-semibold tracking-[-0.6px] ${
 													isActive
-														? 'text-d-bg'
-														: 'text-white'
+														? "text-d-bg"
+														: "text-white"
 												}`}
 											>
-												{getSeverityLabel(incident.severity)}
+												{getSeverityLabel(
+													incident.severity
+												)}
 											</p>
 										</div>
 										<p
 											className={`text-2xl tracking-[-1.2px] whitespace-pre-wrap ${
-												isActive ? 'text-d-bg' : 'text-white'
+												isActive
+													? "text-d-bg"
+													: "text-white"
 											}`}
 										>
 											{incident.title}
@@ -130,8 +134,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeIncidentId }) => {
 									<p
 										className={`text-xs tracking-[-0.6px] ${
 											isActive
-												? 'text-d-bg/50'
-												: 'text-white/50'
+												? "text-d-bg/50"
+												: "text-white/50"
 										}`}
 									>
 										Last Updated: {incident.lastUpdated}

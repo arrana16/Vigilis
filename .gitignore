@@ -1,6 +1,6 @@
 # Environment variables
 .env
-
+frontend-context
 # Python
 __pycache__/
 *.py[cod]

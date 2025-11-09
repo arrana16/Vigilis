@@ -1006,12 +1006,17 @@ const EmbeddedMap: React.FC<EmbeddedMapProps> = ({
 			let labelLayerId = "";
 
 			for (let i = layers.length - 1; i >= 0; i--) {
-				if (
-					layers[i].type === "symbol" &&
-					layers[i].layout!["text-field"]
-				) {
-					labelLayerId = layers[i].id;
-					break;
+				const layer = layers[i] as mapboxgl.AnyLayer;
+				if (layer.type === "symbol") {
+					const layout = (
+						layer as unknown as {
+							layout?: { [k: string]: unknown };
+						}
+					).layout;
+					if (layout && typeof layout["text-field"] !== "undefined") {
+						labelLayerId = layer.id;
+						break;
+					}
 				}
 			}
 
@@ -1096,6 +1101,8 @@ const EmbeddedMap: React.FC<EmbeddedMapProps> = ({
 			}
 			initialized.current = false;
 		};
+		// Mount-only effect; dependencies intentionally excluded.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	return (
