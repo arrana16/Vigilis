@@ -39,7 +39,7 @@ def _exists(id: str) -> bool:
     except Exception as e:
         raise ValueError(f"Error checking if incident {id} exists: {str(e)}")
 
-def add_transcript(id: str, transcript: str, caller: str):
+def add_transcript(id: str, transcript: str, caller: str, convo: str):
     """
     Update the transcript of an incident in the database.
     
@@ -58,7 +58,7 @@ def add_transcript(id: str, transcript: str, caller: str):
             formatted_transcript = f"{caller}: {transcript}"
             result = collection.update_one(
                 {"incident_id": id},
-                {"$push": {"transcripts.911_call": formatted_transcript}}
+                {"$push": {f"transcripts.{convo}": formatted_transcript}}
             )
             
             if result.matched_count == 0:

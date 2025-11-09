@@ -92,6 +92,7 @@ class AddTranscriptRequest(BaseModel):
    incident_id: str
    transcript: str
    caller: str
+   convo: str
 
 
 class ConcludeIncidentRequest(BaseModel):
@@ -335,7 +336,7 @@ async def add_incident_transcript(request: AddTranscriptRequest):
    Creates a new incident if it doesn't exist, or appends to existing incident.
    """
    try:
-       add_transcript(request.incident_id, request.transcript, request.caller)
+       add_transcript(request.incident_id, request.transcript, request.caller, request.convo)
        update_dynamic_fields(request.incident_id)
        
        # Trigger fill agent analysis (with rate limiting built-in)
