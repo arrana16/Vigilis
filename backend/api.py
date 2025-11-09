@@ -972,7 +972,7 @@ async def notify_clients_from_trigger(request: Request):
    if incident_id:
        # Run the fill agent analysis
        try:
-           analyze_incident(incident_id=incident_id)
+           update_dynamic_fields(incident_id=incident_id)
        except Exception as e:
            print(f"Error analyzing incident {incident_id}: {e}")
 
