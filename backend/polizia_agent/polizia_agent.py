@@ -1,86 +1,145 @@
-import sys
+
+from .polizia_tools import get_incident_context
+from google.adk.agents import LlmAgent
+from google.adk.tools import FunctionTool
+import google.generativeai as genai
 import os
 from dotenv import load_dotenv
-from datetime import datetime, UTC
+from db import update_chat_elements
 
-# Handle imports for both direct execution and module import
-try:
-    from backend.db import update_chat_elements
-    from .polizia_tools import update_context, update_context_func
-except ImportError:
-    # Add parent directory to path for direct execution
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, parent_dir)
-    from db import update_chat_elements
-    from polizia_agent.polizia_tools import update_context, update_context_func
-
-from google.adk.agents.llm_agent import Agent
 
 load_dotenv()
 
-# Force API key mode (not Vertex AI)
-os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = '0'
 
-# System instruction for the agent
-SYSTEM_INSTRUCTION = """You are Vigilis, an AI assistant for 911 dispatchers and emergency services personnel. 
+# System instruction for the Vigilis agent
+SYSTEM_INSTRUCTION = """You are Vigilis, an AI assistant for 911 dispatchers and emergency services personnel.
+
 
 Your role is to:
-- Help dispatchers understand current incidents by retrieving and explaining incident data
-- Answer questions about emergency protocols and procedures
-- Provide context and insights about ongoing situations
+- Answer questions about active incidents by retrieving real-time data from the database
+- Help dispatchers understand incident locations, status, and details
+- Explain transcripts from 911 calls and radio communications
+- Provide context and insights about ongoing emergency situations
 - Assist with incident management decisions
 
-You have access to a tool called 'update_context_func' that can retrieve incident information from the database. When a user asks about a specific incident, use this tool to get the latest data.
 
-Be professional, concise, and helpful. Your goal is to support emergency services personnel in making fast, informed decisions."""
+IMPORTANT: When a user asks about ANY detail of an incident (location, status, summary, transcripts, etc.),
+you MUST call the 'get_incident_context' tool to retrieve the current incident data from the database.
 
-# Create the polizia agent
-polizia_agent = Agent(
-    model='gemini-2.5-flash',
-    name='vigilis_assistant',
-    description='AI assistant for 911 dispatchers and emergency services personnel.',
-    instruction=SYSTEM_INSTRUCTION,
-    tools=[update_context]
+
+Examples of when to call the tool:
+- "Where is the fire?" → Call tool to get location
+- "What's the incident summary?" → Call tool to get current_summary
+- "What did the 911 caller say?" → Call tool to get transcripts 
+- "What's happening?" → Call tool to get all details
+- "What's the status?" → Call tool to get status field
+
+
+After retrieving the data from the tool, extract the relevant information and provide a clear,
+concise answer focusing on what the dispatcher needs to know.
+
+
+Be professional, accurate, and helpful. Your goal is to support emergency services personnel
+in making fast, informed decisions during critical situations."""
+
+
+# Create the Vigilis agent using Google ADK
+vigilis_agent = LlmAgent(
+   name="VIGILISAgent",
+   description="AI assistant for 911 dispatchers that retrieves and explains incident data",
+   model="gemini-2.0-flash-exp",  # Using Gemini 2.0 Flash
+   instruction=SYSTEM_INSTRUCTION,
+   tools=[FunctionTool(get_incident_context)]  # Wrap the function in FunctionTool
 )
 
 
+# Configure Gemini with API key (using google.generativeai for API key support)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+
 def chat(message: str, incident_id: str = None) -> str:
-    """
-    Send a message to the agent and get a response.
-    
-    Args:
-        message: The user's message/question
-        incident_id: Optional incident ID for context
-    
-    Returns:
-        The agent's response as a string
-    """
-    message_time = datetime.now(UTC).isoformat()
-    
-    # Build prompt with incident context if provided
-    if incident_id:
-        prompt = f"[Current Incident: {incident_id}]\n{message}"
-    else:
-        prompt = message
-    
-    # Send message to the agent
-    response = polizia_agent.send_message(prompt)
-    
-    # Update chat elements in database
-    current_time = datetime.now(UTC).isoformat()
-    elements = [
-        {"Author": "Caller", "Content": message, "Time": message_time},
-        {"Author": "Polizia", "Content": response.text, "Time": current_time}
-    ]
-    
-    if incident_id:
-        update_chat_elements(incident_id, elements)
-                
-    return response.text
+   """
+   Send a message to the Vigilis agent and get a response.
+  
+   This function uses Google ADK's function tool definition with direct Gemini API calls
+   to provide function calling capabilities while maintaining simplicity.
+  
+   Args:
+       message: The user's message/question
+       incident_id: Optional incident ID for context
+  
+   Returns:
+       The agent's response as a string
+   """
+   # Prepare the prompt with incident context if provided
+   if incident_id:
+       prompt = f"[Current Incident ID: {incident_id}]\n\nUser question: {message}"
+   else:
+       prompt = message
+  
+   print(f"\n🔵 VIGILIS Agent processing: {message}")
+   if incident_id:
+       print(f"   Incident ID: {incident_id}")
+  
+   # Define the tool for Gemini function calling
+   tool_config = {
+       "function_declarations": [{
+           "name": "get_incident_context",
+           "description": get_incident_context.__doc__ or "Retrieve detailed incident information from the database",
+           "parameters": {
+               "type": "object",
+               "properties": {
+                   "incident_id": {
+                       "type": "string",
+                       "description": "The ID of the incident to retrieve (e.g., 'INC-001' or UUID format)"
+                   }
+               },
+               "required": ["incident_id"]
+           }
+       }]
+   }
+  
+   # Create the model with tools
+   model = genai.GenerativeModel(
+       model_name="gemini-2.0-flash-exp",
+       system_instruction=SYSTEM_INSTRUCTION,
+       tools=[tool_config]
+   )
+  
+   # Start a chat session for easier multi-turn conversation
+   chat = model.start_chat()
+  
+   # Send initial request to Gemini with tools
+   response = chat.send_message(prompt)
+  
+   # Check if the model wants to call a function
+   if response.candidates[0].content.parts and hasattr(response.candidates[0].content.parts[0], 'function_call'):
+       function_call = response.candidates[0].content.parts[0].function_call
+      
+       print(f"   🔧 Calling tool: {function_call.name}(incident_id={function_call.args['incident_id']})")
+      
+       # Execute the function
+       function_result = get_incident_context(function_call.args['incident_id'])
+      
+       # Send the function result back to the model using chat session
+       response = chat.send_message(
+           genai.protos.Content(
+               parts=[genai.protos.Part(
+                   function_response=genai.protos.FunctionResponse(
+                       name=function_call.name,
+                       response={"result": function_result}
+                   )
+               )]
+           )
+       )
+  
+   # Extract the final text response
+   response_text = response.text if hasattr(response, 'text') else ""
+  
+   if not response_text:
+       response_text = "No response generated"
+  
+   print(f"✅ VIGILIS Agent responded ({len(response_text)} chars)\n")
 
-
-if __name__ == "__main__":
-    test_message = "What is the current status of incident F251107-0124?"
-    response = chat(test_message, incident_id="F251107-0124")
-    print("Agent Response:")
-    print(response)
+   response_text = {"Dispatcher Response": response_text, "Agent": response_text}
+   update_chat_elements(incident_id, response_text)

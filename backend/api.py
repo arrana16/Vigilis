@@ -6,6 +6,7 @@ import sys
 import os
 import asyncio
 import json
+from polizia_agent.polizia_agent import chat
 
 
 # Add parent directory to path
@@ -198,7 +199,7 @@ def root():
            "GET /stats": "Service statistics",
            "GET /incidents": "Get all active incidents",
            "GET /incidents/all": "DEBUG: Get all incidents (any status)",
-        #    "POST /chat": "Chat with Vigilis AI assistant",
+           "POST /chat": "Chat with Vigilis AI assistant",
            "POST /incident/update_transcript": "Add transcript to incident (creates new or appends to existing)",
            "GET /incident/chat_elements/{incident_id}": "Get chat elements for incident",
            "POST /incident/context": "Get incident context (BSON)",
@@ -304,22 +305,22 @@ def get_stats():
    }
 
 
-# @app.post("/chat")
-# def chat_with_agent(request: ChatRequest):
-#    """
-#    Chat with the Vigilis AI assistant. Optionally provide an incident_id for context.
-#    """
-#    try:
-#        response = chat(request.message, request.incident_id)
-#        return {
-#            "message": request.message,
-#            "incident_id": request.incident_id,
-#            "response": response
-#        }
-#    except ValueError as e:
-#        raise HTTPException(status_code=404, detail=str(e))
-#    except Exception as e:
-#        raise HTTPException(status_code=500, detail=str(e))
+@app.post("/chat")
+def chat_with_agent(request: ChatRequest):
+   """
+   Chat with the Vigilis AI assistant. Optionally provide an incident_id for context.
+   """
+   try:
+       response = chat(request.message, request.incident_id)
+       return {
+           "message": request.message,
+           "incident_id": request.incident_id,
+           "response": response
+       }
+   except ValueError as e:
+       raise HTTPException(status_code=404, detail=str(e))
+   except Exception as e:
+       raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
