@@ -68,6 +68,8 @@ def add_transcript(id: str, transcript: str, caller: str, convo: str):
             raise
         except Exception as e:
             raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
+        
+    return "Transcript added successfully"
     
 def _new_entry(id: str, transcript: str, caller: str, convo: str):
     """

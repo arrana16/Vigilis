@@ -95,9 +95,10 @@ def update_params_func(id: str, new_location: str, new_severity: str, new_summar
             update_doc["current_summary"] = new_summary
         
         # CRITICAL: Add coordinates to geojson.coordinates (use correct dot notation)
-        if coordinates:
+        # Check for None explicitly (not just falsy) because [0, 0] is valid
+        if coordinates is not None:
             update_doc["location.geojson.coordinates"] = coordinates
-            print(f"🗺️  Setting coordinates in update_doc: {coordinates}")
+            print(f"🗺️  Setting coordinates in update_doc: {coordinates} (type: {type(coordinates)})")
         
         # If any fields were updated, set the last_summary_update_at timestamp
         if update_doc:

@@ -340,19 +340,17 @@ async def add_incident_transcript(request: AddTranscriptRequest):
        add_transcript(request.incident_id, request.transcript, request.caller, request.convo)
        print(f"✅ Transcript added to incident {request.incident_id}")
        
-       # Wait 5 seconds to ensure MongoDB write is fully committed and allow time for additional transcripts
-       await asyncio.sleep(5)
+       # Broadcast to all connected WebSocket clients
+       await manager.broadcast("data_updated")
        
-       # Trigger fill agent analysis (with rate limiting built-in)
+       # Trigger fill agent analysis immediately (no delay needed - add_transcript is synchronous)
        # This runs AFTER the transcript is confirmed written to the database
        try:
            print(f"🤖 Triggering fill agent analysis for incident {request.incident_id}")
-           update_dynamic_fields(incident_id=request.incident_id)
+           result = update_dynamic_fields(incident_id=request.incident_id)
+           print(f"Fill agent result: {result}")
        except Exception as e:
            print(f"⚠️  Error analyzing incident {request.incident_id}: {e}")
-       
-       # Broadcast to all connected WebSocket clients
-       await manager.broadcast("data_updated")
        
        return {
            "status": "success",
