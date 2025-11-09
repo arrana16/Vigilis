@@ -4,9 +4,16 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 import google.generativeai as genai
 import os
+import sys
 from dotenv import load_dotenv
 from db import update_chat_elements
 
+# Add parent directory to path for imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from model_config import GEMINI_MODEL
 
 load_dotenv()
 
@@ -42,7 +49,7 @@ in making fast, informed decisions during critical situations."""
 vigilis_agent = LlmAgent(
     name="VIGILISAgent",
     description="AI assistant for 911 dispatchers that retrieves and explains incident data",
-    model="gemini-2.0-flash-exp",  # Using Gemini 2.0 Flash
+    model=GEMINI_MODEL,
     instruction=SYSTEM_INSTRUCTION,
     tools=[FunctionTool(get_incident_context)]  # Wrap the function in FunctionTool
 )
@@ -96,7 +103,7 @@ def chat(message: str, incident_id: str = None) -> str:
     
     # Create the model with tools
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash-exp",
+        model_name=GEMINI_MODEL,
         system_instruction=SYSTEM_INSTRUCTION,
         tools=[tool_config]
     )

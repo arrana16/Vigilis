@@ -2,6 +2,7 @@ import sys
 import os
 from dotenv import load_dotenv
 from bson import ObjectId
+from model_config import GEMINI_MODEL
 
 # Load environment variables from .env file
 load_dotenv()
@@ -52,7 +53,7 @@ Transcripts:
 Provide only the summary text, no additional formatting:"""
     
     summary = llm.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
     )
 

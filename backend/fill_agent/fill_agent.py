@@ -15,6 +15,7 @@ except ImportError:
 
 from google import genai
 import time
+from model_config import GEMINI_MODEL
 
 load_dotenv()
 
@@ -272,7 +273,7 @@ Analyze the transcripts and return updates ONLY if there is important new inform
 
     print(f"🤖 Analyzing with Gemini...")
     response = client.models.generate_content(
-        model='gemini-2.0-flash-exp',
+        model=GEMINI_MODEL,
         contents=user_prompt,
         config=genai.types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,

@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from bson import ObjectId
 from suggest import summarize_current_status
 from datetime import datetime
+from model_config import GEMINI_MODEL
 
 # Load environment variables from .env file
 load_dotenv()
@@ -67,7 +68,7 @@ FIRE ENGINE COMMS: {engine_comm}
 Write one detailed paragraph covering: what happened, units dispatched, response times, actions taken, communication quality, team coordination effectiveness, and outcome. Focus on performance analysis - what worked well and areas for improvement. Be specific with times and unit names. Use only the data provided."""
     
     summary = llm.models.generate_content(
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
     )
 
