@@ -1,7 +1,9 @@
-from .tools import update_context
+from backend.db import update_chat_elements
+from .polizia_tools import update_context
 from google import genai
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -35,6 +37,7 @@ def chat(message: str, incident_id: str = None) -> str:
     Returns:
         The agent's response as a string
     """
+    message_time = datetime.utcnow().isoformat() + "Z"
     if incident_id:
         prompt = f"[Current Incident: {incident_id}]\n{message}"
     else:
@@ -82,5 +85,13 @@ def chat(message: str, incident_id: str = None) -> str:
                 temperature=0.7
             )
         )
-    
+
+    current_time = datetime.utcnow().isoformat() + "Z"
+    elements = [
+        {"Author": "Caller", "Content": message, "Time": message_time},
+        {"Author": "Polizia", "Content": response.text, "Time": current_time}
+    ]
+
+    update_chat_elements(incident_id, elements)
+                
     return response.text
