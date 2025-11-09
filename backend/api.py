@@ -12,13 +12,37 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                print(f"Error broadcasting to client: {e}")
+
+
+manager = ConnectionManager()
+
+
 # Import your existing functions
 from suggest import givesuggestions, summarize_current_status
 from update import generate_report, create_bson, set_concluded, post_story
 from fill_agent.fill_agent import analyze_incident
 from polizia_agent.polizia_tools import update_context
 from polizia_agent.polizia_agent import chat
-from db import exists, new_entry, append_to_transcript, retrieve_chat_elements
+from db import add_transcript, retrieve_chat_elements
 from police_cars import (
    PoliceCar,
    PoliceCarStatus,
@@ -63,13 +87,7 @@ class IncidentRequest(BaseModel):
    incident_id: str
 
 
-class NewIncidentRequest(BaseModel):
-   incident_id: str
-   transcript: str
-   caller: str
-
-
-class AppendTranscriptRequest(BaseModel):
+class AddTranscriptRequest(BaseModel):
    incident_id: str
    transcript: str
    caller: str
@@ -179,9 +197,7 @@ def root():
            "GET /health": "Health check",
            "GET /stats": "Service statistics",
            "POST /chat": "Chat with Vigilis AI assistant",
-           "POST /incident/new": "Create a new incident entry",
-           "POST /incident/append": "Append transcript to existing incident",
-           "GET /incident/exists/{incident_id}": "Check if incident exists",
+           "POST /incident/update_transcript": "Add transcript to incident (creates new or appends to existing)",
            "GET /incident/chat_elements/{incident_id}": "Get chat elements for incident",
            "POST /incident/context": "Get incident context (BSON)",
            "POST /incident/summary": "Get incident summary",
@@ -251,53 +267,19 @@ def chat_with_agent(request: ChatRequest):
 # ============================================================================
 
 
-@app.post("/incident/new")
-def create_new_incident(request: NewIncidentRequest):
+@app.post("/incident/update_transcript")
+def add_incident_transcript(request: AddTranscriptRequest):
    """
-   Create a new incident entry in the database
-   """
-   try:
-       new_entry(request.incident_id, request.transcript, request.caller)
-       return {
-           "status": "success",
-           "message": f"Incident {request.incident_id} created successfully",
-           "incident_id": request.incident_id
-       }
-   except ValueError as e:
-       raise HTTPException(status_code=400, detail=str(e))
-   except Exception as e:
-       raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/incident/append")
-def append_incident_transcript(request: AppendTranscriptRequest):
-   """
-   Append new transcript text to an existing incident
+   Add transcript to an incident. 
+   Creates a new incident if it doesn't exist, or appends to existing incident.
    """
    try:
-       append_to_transcript(request.incident_id, request.transcript, request.caller)
+       add_transcript(request.incident_id, request.transcript, request.caller)
        return {
            "status": "success",
-           "message": f"Transcript appended to incident {request.incident_id}",
+           "message": f"Transcript added to incident {request.incident_id}",
            "incident_id": request.incident_id,
            "caller": request.caller
-       }
-   except ValueError as e:
-       raise HTTPException(status_code=404, detail=str(e))
-   except Exception as e:
-       raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/incident/exists/{incident_id}")
-def check_incident_exists(incident_id: str):
-   """
-   Check if an incident exists in the database
-   """
-   try:
-       incident_exists = exists(incident_id)
-       return {
-           "incident_id": incident_id,
-           "exists": incident_exists
        }
    except ValueError as e:
        raise HTTPException(status_code=400, detail=str(e))

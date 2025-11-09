@@ -20,7 +20,7 @@ client = MongoClient(
 db = client["dispatch_db"]
 collection = db["active_incidents"]
 
-def exists(id: str) -> bool:
+def _exists(id: str) -> bool:
     """
     Check if id entry exists in the database.
     
@@ -39,7 +39,7 @@ def exists(id: str) -> bool:
     except Exception as e:
         raise ValueError(f"Error checking if incident {id} exists: {str(e)}")
 
-def append_to_transcript(id: str, transcript: str, caller: str):
+def add_transcript(id: str, transcript: str, caller: str):
     """
     Update the transcript of an incident in the database.
     
@@ -51,22 +51,25 @@ def append_to_transcript(id: str, transcript: str, caller: str):
     Raises:
         ValueError: If incident not found or update fails
     """
-    try:
-        addition = f"{caller}: {transcript}"
-        result = collection.update_one(
-            {"incident_id": id},
-            {"$set": {f"transcripts.{caller}": addition}}
-        )
-        
-        if result.matched_count == 0:
-            raise ValueError(f"No incident found with ID: {id}")
+    if not _exists(id):
+        _new_entry(id, transcript, caller)
+    else:
+        try:
+            formatted_transcript = f"{caller}: {transcript}"
+            result = collection.update_one(
+                {"incident_id": id},
+                {"$push": {"transcripts.911_call": formatted_transcript}}
+            )
             
-    except ValueError:
-        raise
-    except Exception as e:
-        raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
+            if result.matched_count == 0:
+                raise ValueError(f"No incident found with ID: {id}")
+                
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
     
-def new_entry(id: str, transcript: str, caller: str):
+def _new_entry(id: str, transcript: str, caller: str):
     """
     Create a new incident entry in the database.
     
@@ -82,8 +85,10 @@ def new_entry(id: str, transcript: str, caller: str):
         from datetime import datetime
         
         # Check if incident already exists
-        if exists(id):
+        if _exists(id):
             raise ValueError(f"Incident with ID {id} already exists")
+        
+        formatted_transcript = f"{caller}: {transcript}"
         
         entry = {
             "incident_id": id,
@@ -99,7 +104,7 @@ def new_entry(id: str, transcript: str, caller: str):
                 }
             },
             "transcripts": {
-                caller: transcript
+                "911_call": [formatted_transcript]
             },
             "current_summary": "",
             "last_summary_update_at": ""

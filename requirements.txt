@@ -3,6 +3,7 @@ google.adk
 pymongo
 python-dotenv
 fastapi
+pydantic
 uvicorn[standard]
 certifi
 redis
