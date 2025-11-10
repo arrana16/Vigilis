@@ -28,9 +28,8 @@ def get_dynamic_fields_func(id: str):
         Dictionary with transcripts (concatenated string), location, severity, summary, and coordinates.
     """
     try:
-        # Use read concern "majority" to ensure we read the latest committed data
-        from pymongo import ReadConcern
-        incident = collection.with_options(read_concern=ReadConcern("majority")).find_one({"incident_id": id})
+        # Query the incident directly (read concern not needed for single-server deployments)
+        incident = collection.find_one({"incident_id": id})
     except Exception as e:
         return {"error": f"Error querying incident with ID {id}: {e}"}
     
@@ -65,9 +64,10 @@ def get_dynamic_fields_func(id: str):
     return result
 
 
-def update_params_func(id: str, new_location: str, new_severity: str, new_summary: str, new_title: str, coordinates: list) -> str:
+def update_params_func(id: str, new_location: str, new_severity: str, new_summary: str, new_title: str, coordinates: list) -> dict:
     """
     Update the incident parameters in the database.
+    Returns the updated document immediately after write.
     
     Args:
         id: The incident ID as a string
@@ -78,7 +78,7 @@ def update_params_func(id: str, new_location: str, new_severity: str, new_summar
         coordinates: Optional list of [longitude, latitude] for geojson
     
     Returns:
-        Confirmation message as a string
+        Dictionary with 'status', 'message', and 'incident' (the updated document)
     """
     try:
         # Build update document
@@ -106,19 +106,45 @@ def update_params_func(id: str, new_location: str, new_severity: str, new_summar
         if update_doc:
             update_doc["last_summary_update_at"] = datetime.now(UTC).isoformat() + "Z"
         
-        # Update the incident in MongoDB with write concern for durability
-        from pymongo import WriteConcern
-        result = collection.with_options(write_concern=WriteConcern("majority")).update_one(
+        # Log what we're about to update
+        print(f"📝 Update document being sent to MongoDB:")
+        for key, value in update_doc.items():
+            if key == "current_summary":
+                print(f"   {key}: {str(value)[:100]}..." if len(str(value)) > 100 else f"   {key}: {value}")
+            else:
+                print(f"   {key}: {value}")
+        
+        # Use find_one_and_update to atomically update and return the document
+        # This guarantees we get the updated version immediately
+        from pymongo import ReturnDocument
+        
+        updated_incident = collection.find_one_and_update(
             {"incident_id": id},
-            {"$set": update_doc}
+            {"$set": update_doc},
+            return_document=ReturnDocument.AFTER
         )
         
-        if result.matched_count == 0:
-            return f"❌ No incident found with ID: {id}"
+        if not updated_incident:
+            return {
+                "status": "error",
+                "message": f"❌ No incident found with ID: {id}",
+                "incident": None
+            }
         
-        coord_msg = f", Coordinates: {coordinates}" if coordinates else ""
-        return f"✅ Successfully updated incident {id} - Location: {new_location}{coord_msg}, Severity: {new_severity}, Summary updated"
+        # Success - we have the updated document
+        coord_msg = f", Coordinates: {coordinates}" if coordinates is not None else ", Coordinates: unchanged"
+        success_msg = f"✅ Successfully updated incident {id} - Location: {new_location}{coord_msg}, Severity: {new_severity}, Title: {new_title}"
+        
+        return {
+            "status": "success",
+            "message": success_msg,
+            "incident": updated_incident
+        }
         
     except Exception as e:
-        return f"❌ Error updating incident {id}: {e}"
+        return {
+            "status": "error",
+            "message": f"❌ Error updating incident {id}: {e}",
+            "incident": None
+        }
 

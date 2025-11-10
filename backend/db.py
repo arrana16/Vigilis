@@ -39,39 +39,59 @@ def _exists(id: str) -> bool:
     except Exception as e:
         raise ValueError(f"Error checking if incident {id} exists: {str(e)}")
 
-def add_transcript(id: str, transcript: str, caller: str, convo: str):
+def add_transcript(id: str, transcript: str, caller: str, convo: str) -> dict:
     """
     Update the transcript of an incident in the database.
+    Returns the updated incident document immediately after write.
     
     Args:
         id: The ID of the incident to update
         transcript: The new transcript text
         caller: The caller identifier (e.g., "911_call", "Patrol_12_comm")
+        convo: The conversation identifier
+    
+    Returns:
+        Dictionary with 'status', 'message', and 'incident' (the updated document)
     
     Raises:
         ValueError: If incident not found or update fails
     """
+    formatted_transcript = f"{caller}: {transcript}"
+    
     if not _exists(id):
         _new_entry(id, transcript, caller, convo)
+        # Return the newly created incident
+        incident = collection.find_one({"incident_id": id})
+        return {
+            "status": "created",
+            "message": "New incident created with transcript",
+            "incident": incident
+        }
     else:
         try:
-            formatted_transcript = f"{caller}: {transcript}"
-            # Use write concern "majority" to ensure write is committed before returning
-            from pymongo import WriteConcern
-            result = collection.with_options(write_concern=WriteConcern("majority")).update_one(
+            # Use find_one_and_update to atomically update and return the document
+            # return_document=AFTER ensures we get the updated version
+            from pymongo import ReturnDocument
+            
+            updated_incident = collection.find_one_and_update(
                 {"incident_id": id},
-                {"$push": {f"transcripts.{convo}": formatted_transcript}}
+                {"$push": {f"transcripts.{convo}": formatted_transcript}},
+                return_document=ReturnDocument.AFTER
             )
             
-            if result.matched_count == 0:
+            if not updated_incident:
                 raise ValueError(f"No incident found with ID: {id}")
+            
+            return {
+                "status": "updated",
+                "message": "Transcript added successfully",
+                "incident": updated_incident
+            }
                 
         except ValueError:
             raise
         except Exception as e:
             raise ValueError(f"Error appending transcript to incident {id}: {str(e)}")
-        
-    return "Transcript added successfully"
     
 def _new_entry(id: str, transcript: str, caller: str, convo: str):
     """

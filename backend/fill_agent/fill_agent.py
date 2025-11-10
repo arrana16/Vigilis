@@ -331,6 +331,15 @@ Analyze the transcripts and return updates ONLY if there is important new inform
         coordinates=coords
     )
     
+    # Check if update was successful
+    if update_result['status'] == 'error':
+        return f"❌ Database update failed: {update_result['message']}"
+    
+    # We now have the updated incident document immediately!
+    updated_incident = update_result['incident']
+    print(f"✅ Update confirmed - incident document retrieved immediately")
+    print(f"   Verified coordinates in DB: {updated_incident.get('location', {}).get('geojson', {}).get('coordinates', 'NOT SET')}")
+    
     # Determine what changed
     changes = []
     if new_title != current_title:
@@ -350,21 +359,23 @@ CHANGES MADE:
 {chr(10).join('  • ' + change for change in changes)}
 
 DATABASE RESULT:
-{update_result}"""
+{update_result['message']}
+
+✅ Updated incident document confirmed in database"""
     else:
         result = f"""✅ Analysis Complete for {incident_id}
 
 NO CHANGES - All fields remain the same (no important updates detected in transcripts)
 
 DATABASE RESULT:
-{update_result}"""
+{update_result['message']}"""
 
     return result
 
 
 if __name__ == "__main__":
     # Test with the actual incident ID
-    test_incident_id = "1edb6828-667e-47fb-abe4-b0d9b3885459"
+    test_incident_id = "a08fd3d2-d5f2-40f5-964c-329b502b097e"
     result = update_dynamic_fields(test_incident_id)
     print("\n" + "="*80)
     print(result)
@@ -377,5 +388,4 @@ if __name__ == "__main__":
 
 
     
-
 

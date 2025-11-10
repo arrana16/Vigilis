@@ -336,15 +336,14 @@ async def add_incident_transcript(request: AddTranscriptRequest):
    Creates a new incident if it doesn't exist, or appends to existing incident.
    """
    try:
-       # Add transcript to database (synchronous, blocks until write completes)
-       add_transcript(request.incident_id, request.transcript, request.caller, request.convo)
-       print(f"✅ Transcript added to incident {request.incident_id}")
+       # Add transcript to database - returns the updated document immediately
+       db_result = add_transcript(request.incident_id, request.transcript, request.caller, request.convo)
+       print(f"✅ Transcript added to incident {request.incident_id} (status: {db_result['status']})")
        
-       # CRITICAL: Small delay to ensure MongoDB write propagation (especially for replica sets)
-       await asyncio.sleep(0.5)
+       # NO DELAY NEEDED - we already have the updated document!
+       # The incident data is guaranteed to be current because find_one_and_update is atomic
        
-       # Trigger fill agent analysis immediately
-       # This runs AFTER the transcript is confirmed written to the database
+       # Trigger fill agent analysis immediately with confirmed data
        try:
            print(f"🤖 Triggering fill agent analysis for incident {request.incident_id}")
            result = update_dynamic_fields(incident_id=request.incident_id)
@@ -361,7 +360,8 @@ async def add_incident_transcript(request: AddTranscriptRequest):
            "status": "success",
            "message": f"Transcript added to incident {request.incident_id}",
            "incident_id": request.incident_id,
-           "caller": request.caller
+           "caller": request.caller,
+           "db_status": db_result['status']  # 'created' or 'updated'
        }
    except ValueError as e:
        raise HTTPException(status_code=400, detail=str(e))
